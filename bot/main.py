@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-from bot.config import settings
+from bot.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -11,7 +11,7 @@ async def main() -> None:
     logging.basicConfig(level=logging.INFO)
     logger.info("Bot starting... (пока заглушка)")
     # Реальная инициализация диспетчера появится на следующих шагах
-    _ = settings  # чтобы mypy не жаловался на неиспользуемый импорт
+    _ = get_settings  # чтобы mypy не жаловался на неиспользуемый импорт
 
 
 if __name__ == "__main__":
