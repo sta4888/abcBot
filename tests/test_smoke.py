@@ -20,3 +20,11 @@ def test_settings_class_structure() -> None:
     assert "bot" in Settings.model_fields
     assert "postgres" in Settings.model_fields
     assert "redis" in Settings.model_fields
+
+
+def test_db_modules_import() -> None:
+    """Проверяем, что модули БД и модели импортируются."""
+    from bot.db.base import Base  # noqa: F401
+    from bot.db.engine import create_engine, create_session_factory  # noqa: F401
+    from bot.db.session import get_session_factory  # noqa: F401
+    from bot.models import User  # noqa: F401
