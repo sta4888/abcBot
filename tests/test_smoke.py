@@ -43,3 +43,17 @@ def test_alembic_config_loads() -> None:
     parser.read(config_path)
     assert "alembic" in parser.sections()
     assert parser.get("alembic", "script_location") == "migrations"
+
+
+def test_logger_setup_works() -> None:
+    """Проверяем, что setup_logging не падает."""
+    from bot.utils.logger import setup_logging
+
+    setup_logging(debug=False)
+    setup_logging(debug=True)
+
+    # После setup_logging должен быть ровно один handler на корневом логгере
+    import logging
+
+    root = logging.getLogger()
+    assert len(root.handlers) == 1

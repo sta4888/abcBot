@@ -2,16 +2,18 @@ import asyncio
 import logging
 
 from bot.config import get_settings
+from bot.utils.logger import setup_logging
 
 logger = logging.getLogger(__name__)
 
 
 async def main() -> None:
     """Запуск бота."""
-    logging.basicConfig(level=logging.INFO)
-    logger.info("Bot starting... (пока заглушка)")
-    # Реальная инициализация диспетчера появится на следующих шагах
-    _ = get_settings  # чтобы mypy не жаловался на неиспользуемый импорт
+    settings = get_settings()
+    setup_logging(debug=settings.debug)
+
+    logger.info("Bot starting... (пока заглушка, диспетчер появится позже)")
+    logger.debug("Debug mode enabled, settings loaded")
 
 
 if __name__ == "__main__":
