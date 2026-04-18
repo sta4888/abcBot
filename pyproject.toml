@@ -58,3 +58,7 @@ typecheck = "mypy ."
 test = "pytest"
 check = ["lint", "typecheck", "test"]
 pre-commit = "pre-commit run --all-files"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

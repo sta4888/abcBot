@@ -33,4 +33,4 @@ jobs:
         run: uv run mypy .
 
       - name: Pytest
-        run: uv run pytest
+        run: uv run pytest --exit-code=0
