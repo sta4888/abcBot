@@ -59,6 +59,16 @@ test = "pytest"
 check = ["lint", "typecheck", "test"]
 pre-commit = "pre-commit run --all-files"
 
+# Docker — инфраструктура для dev
+infra-up = "docker compose up -d"
+infra-down = "docker compose down"
+infra-logs = "docker compose logs -f"
+infra-reset = "docker compose down -v"
+
+# Docker — полный прод-подобный запуск локально
+prod-up = "docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build"
+prod-down = "docker compose -f docker-compose.yml -f docker-compose.prod.yml down"
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
