@@ -86,3 +86,12 @@ POSTGRES_HOST, POSTGRES_PORT, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB — 
 REDIS_HOST, REDIS_PORT, REDIS_DB — креды Redis
 
 DEBUG — флаг разработки (подробные логи и т. д.)
+
+# перед коммитом
+
+```shell
+uv run poe format
+```
+```python
+uv run pre-commit run --all-files
+```
