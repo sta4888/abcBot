@@ -1,0 +1,23 @@
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: abcbot-bot
+    restart: unless-stopped
+    environment:
+      BOT__TOKEN: ${BOT__TOKEN}
+      POSTGRES__HOST: postgres
+      POSTGRES__PORT: 5432
+      POSTGRES__USER: ${POSTGRES__USER}
+      POSTGRES__PASSWORD: ${POSTGRES__PASSWORD}
+      POSTGRES__DB: ${POSTGRES__DB}
+      REDIS__HOST: redis
+      REDIS__PORT: 6379
+      REDIS__DB: 0
+      DEBUG: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
