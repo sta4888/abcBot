@@ -12,7 +12,7 @@ def create_engine(settings: Settings) -> AsyncEngine:
     """Создаёт async engine на основе настроек."""
     return create_async_engine(
         settings.postgres.dsn,
-        echo=settings.debug,  # в dev выводит все SQL-запросы в лог
+        echo=settings.sql_echo,  # в dev выводит все SQL-запросы в лог
         pool_pre_ping=True,  # проверяет, что соединение живое, перед использованием
     )
 

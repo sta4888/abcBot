@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     redis: RedisConfig
 
     debug: bool = False
+    sql_echo: bool = False
 
 
 @lru_cache(maxsize=1)
