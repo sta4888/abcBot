@@ -55,9 +55,10 @@ bot = "python -m bot.main"
 lint = "ruff check ."
 lint-fix = "ruff check . --fix"
 format = "ruff format ."
+format-check = "ruff format --check ."
 typecheck = "mypy ."
 test = "pytest"
-check = ["lint", "typecheck", "test"]
+check = ["lint", "format-check", "typecheck", "test"]
 pre-commit = "pre-commit run --all-files"
 
 # Docker — инфраструктура для dev
