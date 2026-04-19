@@ -3,23 +3,11 @@ import logging
 from aiogram import F, Router
 from aiogram.types import Message
 
-from bot.keyboards.user.main_menu import (
-    BTN_CART,
-    BTN_CATALOG,
-    BTN_HELP,
-    BTN_ORDERS,
-)
+from bot.keyboards.user.main_menu import BTN_CART, BTN_HELP, BTN_ORDERS
 
 logger = logging.getLogger(__name__)
 
 router = Router(name="user.menu")
-
-
-@router.message(F.text == BTN_CATALOG)
-async def on_catalog_click(message: Message) -> None:
-    """Нажатие 'Каталог' — пока заглушка, реальный каталог в итерации 2."""
-    logger.info("User %s clicked Catalog", message.from_user.id if message.from_user else "?")
-    await message.answer("Раздел «Каталог» скоро появится 👀")
 
 
 @router.message(F.text == BTN_CART)

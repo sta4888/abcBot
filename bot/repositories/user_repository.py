@@ -1,21 +1,15 @@
 import logging
 
-from sqlalchemy import select
-
 from bot.models import User
 from bot.repositories.base import BaseRepository
 
 logger = logging.getLogger(__name__)
 
 
-class UserRepository(BaseRepository):
+class UserRepository(BaseRepository[User]):
     """Работа с пользователями в БД."""
 
-    async def get_by_id(self, user_id: int) -> User | None:
-        """Возвращает пользователя по Telegram ID или None, если не найден."""
-        stmt = select(User).where(User.id == user_id)
-        result = await self._session.execute(stmt)
-        return result.scalar_one_or_none()
+    model_cls = User
 
     async def create(
         self,
@@ -32,7 +26,7 @@ class UserRepository(BaseRepository):
             last_name=last_name,
         )
         self._session.add(user)
-        await self._session.flush()  # чтобы сразу получить id/created_at от БД
+        await self._session.flush()
         logger.info("Created new user: %r", user)
         return user
 
@@ -43,10 +37,7 @@ class UserRepository(BaseRepository):
         first_name: str | None,
         last_name: str | None,
     ) -> tuple[User, bool]:
-        """Находит пользователя или создаёт. Возвращает (user, is_created).
-
-        Типичный Upsert для регистрации при первом /start.
-        """
+        """Находит пользователя или создаёт. Возвращает (user, is_created)."""
         user = await self.get_by_id(user_id)
         if user is not None:
             return user, False
