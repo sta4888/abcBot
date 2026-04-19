@@ -1,0 +1,36 @@
+import logging
+from collections.abc import Awaitable, Callable
+from typing import Any
+
+from aiogram import BaseMiddleware
+from aiogram.types import TelegramObject
+
+from bot.db.session import get_session_factory
+
+logger = logging.getLogger(__name__)
+
+
+class DatabaseMiddleware(BaseMiddleware):
+    """Открывает сессию SQLAlchemy на каждый апдейт, коммитит по завершении.
+
+    Сессия передаётся в хендлер через data['session'].
+    В хендлере:  async def handler(message: Message, session: AsyncSession) -> ...
+    """
+
+    async def __call__(
+        self,
+        handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
+        event: TelegramObject,
+        data: dict[str, Any],
+    ) -> Any:
+        session_factory = get_session_factory()
+        async with session_factory() as session:
+            data["session"] = session
+            try:
+                result = await handler(event, data)
+                await session.commit()
+                return result
+            except Exception:
+                await session.rollback()
+                logger.exception("Handler failed, rolling back transaction")
+                raise

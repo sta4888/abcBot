@@ -9,6 +9,7 @@ dependencies = [
     "asyncpg>=0.31.0",
     "colorlog>=6.10.1",
     "pydantic-settings>=2.13.1",
+    "redis>=7.4.0",
     "sqlalchemy[asyncio]>=2.0.49",
 ]
 
@@ -29,18 +30,13 @@ extend-exclude = ["migrations/versions"]
 
 [tool.ruff.lint]
 select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes
-    "I",   # isort
-    "N",   # pep8-naming
-    "UP",  # pyupgrade
-    "B",   # bugbear
-    "SIM", # simplify
-    "RUF", # ruff-специфичные
+    "E", "W", "F", "I", "N", "UP", "B", "SIM", "RUF",
 ]
 ignore = [
-    "E501",  # длина строки — форматтер сам следит
+    "E501",    # длина строки — форматтер сам следит
+    "RUF001",  # ambiguous unicode в строках — у нас проект на русском
+    "RUF002",  # ambiguous unicode в docstring — у нас docstring на русском
+    "RUF003",  # ambiguous unicode в комментариях — у нас комментарии на русском
 ]
 
 [tool.ruff.format]
@@ -59,9 +55,10 @@ bot = "python -m bot.main"
 lint = "ruff check ."
 lint-fix = "ruff check . --fix"
 format = "ruff format ."
+format-check = "ruff format --check ."
 typecheck = "mypy ."
 test = "pytest"
-check = ["lint", "typecheck", "test"]
+check = ["lint", "format-check", "typecheck", "test"]
 pre-commit = "pre-commit run --all-files"
 
 # Docker — инфраструктура для dev
