@@ -5,7 +5,9 @@ description = "Telegram shop bot on aiogram for learning design patterns"
 requires-python = ">=3.12"
 dependencies = [
     "aiogram>=3.27.0",
+    "alembic>=1.18.4",
     "asyncpg>=0.31.0",
+    "colorlog>=6.10.1",
     "pydantic-settings>=2.13.1",
     "sqlalchemy[asyncio]>=2.0.49",
 ]
@@ -23,6 +25,7 @@ dev = [
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+extend-exclude = ["migrations/versions"]
 
 [tool.ruff.lint]
 select = [
@@ -71,6 +74,16 @@ infra-reset = "docker compose down -v"
 prod-up = "docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build"
 prod-down = "docker compose -f docker-compose.yml -f docker-compose.prod.yml down"
 
+migrate = "alembic upgrade head"
+migrate-down = "alembic downgrade -1"
+migrate-history = "alembic history --verbose"
+migrate-current = "alembic current --verbose"
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+
+[tool.poe.tasks.migrate-new]
+cmd = "alembic revision --autogenerate -m \"$message\""
+args = [{ name = "message", positional = true, required = true }]
