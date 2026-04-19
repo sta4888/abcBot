@@ -17,7 +17,6 @@ router = Router(name="user.start")
 async def start_handler(message: Message, session: AsyncSession) -> None:
     """Обрабатывает /start: регистрирует пользователя (если новичок), показывает меню."""
     if message.from_user is None:
-        # /start в канале или служебный апдейт — игнорируем
         return
 
     user_repo = UserRepository(session)
@@ -40,3 +39,18 @@ async def start_handler(message: Message, session: AsyncSession) -> None:
         )
 
     await message.answer(greeting, reply_markup=get_main_menu())
+
+
+@router.message()
+async def fallback_handler(message: Message) -> None:
+    """Ловит всё, что не подошло ни одному другому хендлеру.
+
+    Важно: должен быть зарегистрирован ПОСЛЕ всех остальных хендлеров-роутеров.
+    Поэтому фолбэк не в menu.py, а в start.py, и start-роутер подключается последним.
+    """
+    logger.info(
+        "Fallback for user %s: %r",
+        message.from_user.id if message.from_user else "?",
+        message.text,
+    )
+    await message.answer("Не понял тебя 🤔 Нажми кнопку меню или /start")
