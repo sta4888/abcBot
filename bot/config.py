@@ -22,10 +22,7 @@ class PostgresConfig(BaseModel):
     @cached_property
     def dsn(self) -> str:
         """Строка подключения для asyncpg-драйвера SQLAlchemy."""
-        return (
-            f"postgresql+asyncpg://{self.user}:{self.password.get_secret_value()}"
-            f"@{self.host}:{self.port}/{self.db}"
-        )
+        return f"postgresql+asyncpg://{self.user}:{self.password.get_secret_value()}@{self.host}:{self.port}/{self.db}"
 
 
 class RedisConfig(BaseModel):
