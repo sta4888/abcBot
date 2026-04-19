@@ -35,7 +35,7 @@ async def start_handler(message: Message, session: AsyncSession) -> None:
         logger.info("New user registered: id=%d", message.from_user.id)
     else:
         greeting = (
-            f"С возвращением, <b>{message.from_user.first_name or 'друг'}</b>!\n" f"Чем займёмся?"
+            f"С возвращением, <b>{message.from_user.first_name or 'друг'}</b>!\nЧем займёмся?"
         )
 
     await message.answer(greeting, reply_markup=get_main_menu())
