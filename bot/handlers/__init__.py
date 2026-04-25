@@ -4,14 +4,16 @@ from bot.handlers.user.cart import router as user_cart_router
 from bot.handlers.user.catalog import router as user_catalog_router
 from bot.handlers.user.checkout import router as user_checkout_router
 from bot.handlers.user.menu import router as user_menu_router
+from bot.handlers.user.orders import router as user_orders_router
 from bot.handlers.user.start import router as user_start_router
 
 main_router = Router(name="main")
 
-# Специфичные роутеры — раньше: catalog, cart, checkout
+# Специфичные роутеры — раньше: catalog, cart, checkout, orders
 main_router.include_router(user_catalog_router)
 main_router.include_router(user_cart_router)
 main_router.include_router(user_checkout_router)
+main_router.include_router(user_orders_router)
 main_router.include_router(user_menu_router)
 
 # Общие фолбэки в конце

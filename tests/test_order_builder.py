@@ -112,3 +112,27 @@ def test_total_calculation(sample_items: list[OrderItemSpec]) -> None:
     builder.set_items(sample_items)
     # 29900 * 2 + 10000 * 1 = 69800
     assert builder.total == 69800
+
+
+def test_render_summary_includes_all_fields(
+    sample_items: list[OrderItemSpec],
+) -> None:
+    """Сводка содержит все ключевые элементы."""
+    builder = (
+        OrderBuilder(user_id=1)
+        .set_items(sample_items)
+        .set_address("г. Москва, Тверская 7")
+        .set_delivery_method("courier")
+        .set_phone("+79991234567")
+        .set_payment_method("fake")
+        .set_comment("Спасибо")
+    )
+    text = builder.render_summary()
+
+    assert "Книга" in text
+    assert "Ручка" in text
+    assert "г. Москва, Тверская 7" in text
+    assert "+79991234567" in text
+    assert "Спасибо" in text
+    # Итог — 698.00₽ (29900*2 + 10000)
+    assert "698.00" in text

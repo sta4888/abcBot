@@ -83,3 +83,13 @@ class CheckoutSkipCommentCallback(CallbackData, prefix="ck_skip_cmt"):
 
 class CheckoutCancelCallback(CallbackData, prefix="ck_cancel"):
     """Отменить процесс оформления и выйти из FSM."""
+
+
+class CheckoutConfirmCallback(CallbackData, prefix="ck_confirm"):
+    """Подтвердить заказ — финальный шаг FSM."""
+
+
+class OrderPayCallback(CallbackData, prefix="order_pay"):
+    """'Я оплатил' для конкретного заказа (заглушечная оплата)."""
+
+    order_id: int

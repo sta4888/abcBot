@@ -26,10 +26,9 @@ class OrderRepository(BaseRepository[Order]):
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 
-    async def add(self, order: Order) -> None:
+    def add(self, order: Order) -> None:
         """Добавляет заказ в сессию.
 
-        Не делает commit — это обязанность middleware.
-        Не делает flush — пусть ORM сам решит, когда отправить INSERT.
+        Не делает commit и не делает flush — это решает вызывающая сторона.
         """
         self._session.add(order)

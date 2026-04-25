@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.callbacks import (
     CheckoutCancelCallback,
+    CheckoutConfirmCallback,  # ← новый
     CheckoutDeliveryCallback,
     CheckoutPaymentCallback,
     CheckoutSkipCommentCallback,
@@ -17,12 +18,14 @@ from bot.keyboards.user.checkout import (
     PAYMENT_LABELS,
     CheckoutKeyboardFactory,
 )
+from bot.keyboards.user.orders import OrdersKeyboardFactory  # ← новый
 from bot.services.cart_service import CartService
 from bot.services.order_builder import (
     InvalidFieldError,
     OrderBuilder,
     OrderItemSpec,
 )
+from bot.services.order_service import OrderService  # ← новый
 from bot.states.checkout import CheckoutState
 
 logger = logging.getLogger(__name__)
@@ -227,19 +230,57 @@ async def _go_to_confirmation(
     state: FSMContext,
     builder: OrderBuilder,
 ) -> None:
-    """Переход на шаг подтверждения. Полная реализация — в этапе 3."""
+    """Переход на шаг подтверждения: показать сводку и кнопки."""
     await state.set_state(CheckoutState.waiting_confirmation)
     await message.answer(
-        "✅ Все данные собраны.\n\n"
-        "Шаг подтверждения и финальное оформление появятся в следующем этапе.\n"
-        f"Сейчас в билдере:\n"
-        f"• Адрес: <code>{builder.address}</code>\n"
-        f"• Доставка: <code>{builder.delivery_method}</code>\n"
-        f"• Телефон: <code>{builder.phone}</code>\n"
-        f"• Оплата: <code>{builder.payment_method}</code>\n"
-        f"• Комментарий: <code>{builder.comment or '—'}</code>\n"
-        f"• Итого: <b>{builder.total / 100:.2f}₽</b>"
+        builder.render_summary(),
+        reply_markup=CheckoutKeyboardFactory.confirmation(),
     )
+
+
+# ─── Шаг 6: подтверждение и создание заказа ────────────────────────
+
+
+@router.callback_query(CheckoutState.waiting_confirmation, CheckoutConfirmCallback.filter())
+async def confirm_checkout(
+    callback: CallbackQuery,
+    state: FSMContext,
+    session: AsyncSession,
+) -> None:
+    """Подтверждение — создаём заказ в БД и сбрасываем FSM."""
+    if callback.from_user is None:
+        await callback.answer()
+        return
+
+    data = await state.get_data()
+    builder = OrderBuilder.from_dict(data)
+
+    # Финальная проверка: на всякий случай (вдруг что-то поломалось в FSM)
+    if not builder.is_complete():
+        await callback.answer("Не все поля заполнены", show_alert=True)
+        await state.clear()
+        return
+
+    try:
+        order = await OrderService(session).create_order_from_builder(builder)
+    except Exception as e:
+        logger.exception("Failed to create order")
+        await callback.answer(f"Не удалось создать заказ: {e}", show_alert=True)
+        await state.clear()
+        return
+
+    await state.clear()
+
+    text = (
+        f"🎉 <b>Заказ #{order.id} создан!</b>\n\n"
+        f"Сумма: <b>{order.total / 100:.2f}₽</b>\n\n"
+        f"Нажми «Я оплатил», когда переведёшь деньги.\n"
+        f"<i>(Это заглушечная оплата — реальный платёжный шлюз появится позже.)</i>"
+    )
+
+    if isinstance(callback.message, Message):
+        await callback.message.edit_text(text, reply_markup=OrdersKeyboardFactory.pay_action(order.id))
+    await callback.answer()
 
 
 # ─── Отмена ────────────────────────────────────────────────────────

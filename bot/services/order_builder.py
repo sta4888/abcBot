@@ -229,3 +229,38 @@ class OrderBuilder:
             comment=cast(str | None, data.get("comment")),
             items=items,
         )
+
+        # ─── Рендер сводки для подтверждения ───────────────────────
+
+    def render_summary(self) -> str:
+        """Текст сводки заказа для шага подтверждения.
+
+        Это просто форматирование на основе уже накопленных данных билдера.
+        """
+        from bot.keyboards.user.checkout import DELIVERY_LABELS, PAYMENT_LABELS
+
+        delivery_label = DELIVERY_LABELS.get(self.delivery_method or "", self.delivery_method or "—")
+        payment_label = PAYMENT_LABELS.get(self.payment_method or "", self.payment_method or "—")
+
+        lines: list[str] = ["📋 <b>Проверь данные заказа</b>", ""]
+        lines.append("<b>Состав:</b>")
+        for idx, item in enumerate(self.items, start=1):
+            line_total_rub = (item.price * item.quantity) / 100
+            lines.append(
+                f"  {idx}. {item.product_name}\n"
+                f"     {item.price / 100:.2f}₽ × {item.quantity} "
+                f"= <b>{line_total_rub:.2f}₽</b>"
+            )
+
+        lines.append("")
+        lines.append(f"<b>Адрес:</b> {self.address}")
+        lines.append(f"<b>Доставка:</b> {delivery_label}")
+        lines.append(f"<b>Телефон:</b> <code>{self.phone}</code>")
+        lines.append(f"<b>Оплата:</b> {payment_label}")
+        if self.comment:
+            lines.append(f"<b>Комментарий:</b> {self.comment}")
+
+        lines.append("")
+        lines.append(f"<b>Итого: {self.total / 100:.2f}₽</b>")
+
+        return "\n".join(lines)
