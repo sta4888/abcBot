@@ -62,7 +62,5 @@ class AdminNotifierObserver(EventObserver):
                 f"Телефон: <code>{order.contact_phone}</code>"  # type: ignore[attr-defined]
             )
         if event.name == "order.cancelled":
-            return (
-                f"❌ Отменён заказ #{event.order_id}\n" f"Сумма: {order.total / 100:.2f}₽"  # type: ignore[attr-defined]
-            )
+            return f"❌ Отменён заказ #{event.order_id}\nСумма: {order.total / 100:.2f}₽"  # type: ignore[attr-defined]
         return f"Событие: {event.name} order={event.order_id}"
