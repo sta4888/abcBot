@@ -55,6 +55,7 @@ class Settings(BaseSettings):
 
     debug: bool = False
     sql_echo: bool = False
+    product_placeholder_file_id: str = ""
 
 
 @lru_cache(maxsize=1)

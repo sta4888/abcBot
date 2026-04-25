@@ -131,3 +131,28 @@ class CartService:
     async def clear(self, user_id: int) -> None:
         """Очищает корзину."""
         await self._cart_repo.clear_user_cart(user_id)
+
+    def render_text(self, summary: CartSummary) -> str:
+        """Формирует текст корзины для показа в Telegram.
+
+        Это форматирование, не бизнес-логика. Поэтому — обычная функция,
+        не Builder, не паттерн. Builder появится для Order в следующей итерации.
+        """
+        if summary.is_empty:
+            return "🛒 Твоя корзина пуста.\n\nЗагляни в каталог, выбери что-нибудь интересное."
+
+        lines: list[str] = ["🛒 <b>Твоя корзина</b>", ""]
+        for idx, line in enumerate(summary.lines, start=1):
+            line_total_rub = line.line_total / 100
+            lines.append(
+                f"{idx}. <b>{line.product.name}</b>\n"
+                f"   {line.product.price_rub:.2f}₽ × {line.quantity} "
+                f"= <b>{line_total_rub:.2f}₽</b>"
+            )
+
+        lines.append("")
+        lines.append("─" * 20)
+        lines.append(f"<b>Итого:</b> {summary.total_rub:.2f}₽")
+        lines.append(f"Товаров: <b>{summary.items_count}</b> шт.")
+
+        return "\n".join(lines)
