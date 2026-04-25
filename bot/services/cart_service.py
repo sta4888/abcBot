@@ -156,3 +156,12 @@ class CartService:
         lines.append(f"Товаров: <b>{summary.items_count}</b> шт.")
 
         return "\n".join(lines)
+
+    async def get_items_count(self, user_id: int) -> int:
+        """Сколько штук товаров в корзине пользователя.
+
+        Если 0 — корзина пуста. Используется для UI: показывать ли кнопку 'Оформить'
+        и какой счётчик в ней рисовать.
+        """
+        items = await self._cart_repo.list_by_user(user_id)
+        return sum(item.quantity for item in items)

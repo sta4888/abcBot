@@ -5,6 +5,7 @@ from bot.keyboards.callbacks import (
     AddToCartCallback,
     CatalogBackCallback,
     CategoryCallback,
+    CheckoutStartCallback,
     ProductCallback,
     ProductCardCallback,
     ProductsListModeCallback,
@@ -99,8 +100,14 @@ class CatalogKeyboardFactory:
         return builder.as_markup()
 
     @staticmethod
-    def product_card(product: Product) -> InlineKeyboardMarkup:
-        """Клавиатура старого детального экрана товара (открытого из списка)."""
+    def product_card(
+        product: Product,
+        cart_items_count: int = 0,
+    ) -> InlineKeyboardMarkup:
+        """Клавиатура старого детального экрана товара (открытого из списка).
+
+        Если в корзине что-то есть — показываем кнопку 'Оформить' со счётчиком.
+        """
         builder = InlineKeyboardBuilder()
 
         if product.is_in_stock:
@@ -108,6 +115,14 @@ class CatalogKeyboardFactory:
                 InlineKeyboardButton(
                     text="🛒 В корзину",
                     callback_data=AddToCartCallback(product_id=product.id).pack(),
+                )
+            )
+
+        if cart_items_count > 0:
+            builder.row(
+                InlineKeyboardButton(
+                    text=f"✅ Оформить ({cart_items_count})",
+                    callback_data=CheckoutStartCallback().pack(),
                 )
             )
 
@@ -120,16 +135,26 @@ class CatalogKeyboardFactory:
         return builder.as_markup()
 
     @staticmethod
-    def product_slider_card(view: CardView) -> InlineKeyboardMarkup:
-        """Клавиатура карточки в режиме слайдера: ‹ N/M › и [В корзину]."""
+    def product_slider_card(
+        view: CardView,
+        cart_items_count: int = 0,
+    ) -> InlineKeyboardMarkup:
+        """Клавиатура карточки в режиме слайдера: ‹ N/M › и [В корзину/Оформить]."""
         builder = InlineKeyboardBuilder()
 
-        # Кнопка 'В корзину' — только если в наличии
         if view.product.is_in_stock:
             builder.row(
                 InlineKeyboardButton(
                     text="🛒 В корзину",
                     callback_data=AddToCartCallback(product_id=view.product.id).pack(),
+                )
+            )
+
+        if cart_items_count > 0:
+            builder.row(
+                InlineKeyboardButton(
+                    text=f"✅ Оформить ({cart_items_count})",
+                    callback_data=CheckoutStartCallback().pack(),
                 )
             )
 
