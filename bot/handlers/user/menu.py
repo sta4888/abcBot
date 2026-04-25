@@ -3,18 +3,11 @@ import logging
 from aiogram import F, Router
 from aiogram.types import Message
 
-from bot.keyboards.user.main_menu import BTN_CART, BTN_HELP, BTN_ORDERS
+from bot.keyboards.user.main_menu import BTN_HELP, BTN_ORDERS
 
 logger = logging.getLogger(__name__)
 
 router = Router(name="user.menu")
-
-
-@router.message(F.text == BTN_CART)
-async def on_cart_click(message: Message) -> None:
-    """Нажатие 'Корзина' — заглушка."""
-    logger.info("User %s clicked Cart", message.from_user.id if message.from_user else "?")
-    await message.answer("Твоя корзина пока пуста. Загляни в каталог 🛍")
 
 
 @router.message(F.text == BTN_ORDERS)

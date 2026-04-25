@@ -20,12 +20,37 @@ router = Router(name="user.catalog")
 
 @router.message(F.text == BTN_CATALOG)
 async def show_catalog(message: Message, session: AsyncSession) -> None:
-    """Пользователь нажал кнопку 'Каталог' → показываем категории."""
-    categories = await CatalogService(session).list_categories()
+    """Пользователь нажал кнопку 'Каталог' → показываем категории.
+
+    Если категория всего одна — пропускаем шаг выбора и показываем её товары.
+    """
+    catalog = CatalogService(session)
+    categories = await catalog.list_categories()
+
     if not categories:
         await message.answer("В магазине пока нет категорий 😔")
         return
 
+    if len(categories) == 1:
+        # Только одна категория — сразу показываем её товары
+        view = await catalog.get_category_page(categories[0].id, page=0)
+        if view is None:
+            await message.answer("Категория недоступна.")
+            return
+
+        if not view.products_page.items:
+            text = f"В категории <b>{view.category.name}</b> пока нет товаров."
+        else:
+            text = f"<b>{view.category.name}</b>\nВыбери товар:"
+
+        kb = CatalogKeyboardFactory.products_list(
+            category_id=view.category.id,
+            products_page=view.products_page,
+        )
+        await message.answer(text, reply_markup=kb)
+        return
+
+    # Несколько категорий — обычный экран выбора
     kb = CatalogKeyboardFactory.categories_list(categories)
     await message.answer("Выбери категорию:", reply_markup=kb)
 
