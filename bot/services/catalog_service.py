@@ -23,6 +23,24 @@ class CategoryView:
     products_page: Page[Product]
 
 
+@dataclass(frozen=True, slots=True)
+class CardView:
+    """DTO для отображения одной карточки товара в режиме слайдера."""
+
+    product: Product
+    category: Category
+    page: int  # индекс этого товара в категории, с 0
+    total: int  # сколько всего товаров в категории
+
+    @property
+    def has_prev(self) -> bool:
+        return self.page > 0
+
+    @property
+    def has_next(self) -> bool:
+        return self.page + 1 < self.total
+
+
 class CatalogService:
     """Фасад над работой с каталогом (категории + товары)."""
 
@@ -65,3 +83,33 @@ class CatalogService:
     async def get_product(self, product_id: int) -> Product | None:
         """Товар по id или None."""
         return await self._product_repo.get_by_id(product_id)
+
+    async def get_product_card(self, category_id: int, page: int) -> CardView | None:
+        """Возвращает карточку товара по индексу в категории.
+
+        Используется в режиме слайдера: листаем товары по одному с фото.
+        page — индекс с 0.
+        """
+        category = await self._category_repo.get_by_id(category_id)
+        if category is None or not category.is_active:
+            return None
+
+        total = await self._product_repo.count_by_category(category_id)
+        if total == 0 or page < 0 or page >= total:
+            return None
+
+        # Берём ровно один товар, по offset = page
+        products = await self._product_repo.list_by_category(
+            category_id=category_id,
+            limit=1,
+            offset=page,
+        )
+        if not products:
+            return None
+
+        return CardView(
+            product=products[0],
+            category=category,
+            page=page,
+            total=total,
+        )

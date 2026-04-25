@@ -47,3 +47,19 @@ class CartShowCallback(CallbackData, prefix="cart_show"):
 
 class CheckoutStartCallback(CallbackData, prefix="checkout"):
     """Начать оформление заказа."""
+
+
+class ProductCardCallback(CallbackData, prefix="prod_card"):
+    """Открыть карточку товара в режиме карточного просмотра.
+
+    page = индекс товара в категории (с 0).
+    """
+
+    category_id: int
+    page: int
+
+
+class ProductsListModeCallback(CallbackData, prefix="prod_list"):
+    """Переключиться на режим списка для категории."""
+
+    category_id: int
