@@ -10,7 +10,6 @@ from bot.keyboards.callbacks import (
     CartClearCallback,
     CartRemoveCallback,
     CartShowCallback,
-    CheckoutStartCallback,
 )
 from bot.keyboards.user.cart import CartKeyboardFactory
 from bot.keyboards.user.main_menu import BTN_CART
@@ -131,27 +130,6 @@ async def clear_cart(callback: CallbackQuery, session: AsyncSession) -> None:
     await CartService(session).clear(callback.from_user.id)
     await callback.answer("Корзина очищена")
     await _refresh_cart_screen(callback, session)
-
-
-# ─── Оформление (заглушка до итерации 4) ───────────────────────────────
-
-
-@router.callback_query(CheckoutStartCallback.filter())
-async def start_checkout(callback: CallbackQuery, session: AsyncSession) -> None:
-    """Заглушка — реальная FSM оформления появится в итерации 4."""
-    if callback.from_user is None:
-        await callback.answer()
-        return
-
-    summary = await CartService(session).get_summary(callback.from_user.id)
-    if summary.is_empty:
-        await callback.answer("Корзина пуста", show_alert=True)
-        return
-
-    await callback.answer(
-        "Оформление заказа появится в следующих обновлениях 🛠",
-        show_alert=True,
-    )
 
 
 # ─── Утилита ────────────────────────────────────────────────────────────

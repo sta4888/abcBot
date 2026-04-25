@@ -63,3 +63,23 @@ class ProductsListModeCallback(CallbackData, prefix="prod_list"):
     """Переключиться на режим списка для категории."""
 
     category_id: int
+
+
+class CheckoutDeliveryCallback(CallbackData, prefix="ck_dlv"):
+    """Выбор способа доставки в FSM."""
+
+    method: str  # 'courier' | 'pickup' | 'post'
+
+
+class CheckoutPaymentCallback(CallbackData, prefix="ck_pay"):
+    """Выбор способа оплаты в FSM."""
+
+    method: str  # 'fake' пока что
+
+
+class CheckoutSkipCommentCallback(CallbackData, prefix="ck_skip_cmt"):
+    """Пропустить ввод комментария."""
+
+
+class CheckoutCancelCallback(CallbackData, prefix="ck_cancel"):
+    """Отменить процесс оформления и выйти из FSM."""
