@@ -271,15 +271,15 @@ async def confirm_checkout(
 
     await state.clear()
 
-    text = (
-        f"🎉 <b>Заказ #{order.id} создан!</b>\n\n"
-        f"Сумма: <b>{order.total / 100:.2f}₽</b>\n\n"
-        f"Нажми «Я оплатил», когда переведёшь деньги.\n"
-        f"<i>(Это заглушечная оплата — реальный платёжный шлюз появится позже.)</i>"
-    )
+    payment_init = await OrderService(session).initiate_payment(order)
+
+    # Заголовок плюс текст от стратегии
+    text = f"🎉 <b>Заказ #{order.id} создан!</b>\n\n{payment_init.text}"
+
+    kb = OrdersKeyboardFactory.pay_action(order.id) if payment_init.requires_user_action else None
 
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(text, reply_markup=OrdersKeyboardFactory.pay_action(order.id))
+        await callback.message.edit_text(text, reply_markup=kb)
     await callback.answer()
 
 

@@ -27,7 +27,7 @@ async def mark_order_paid(
         await callback.answer()
         return
 
-    order = await OrderService(session).mark_paid(
+    order = await OrderService(session).confirm_payment(
         order_id=callback_data.order_id,
         user_id=callback.from_user.id,
     )
