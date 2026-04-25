@@ -4,9 +4,10 @@ from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.domain.order_states import get_order_state
 from bot.keyboards.callbacks import OrderPayCallback
 from bot.keyboards.user.main_menu import BTN_ORDERS
-from bot.services.order_service import STATUS_LABELS, OrderService
+from bot.services.order_service import OrderService
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,11 @@ async def mark_order_paid(
     callback_data: OrderPayCallback,
     session: AsyncSession,
 ) -> None:
-    """'Я оплатил' — заглушечный переход new → paid."""
+    """'Я оплатил' — переход new → paid через стратегию + State.
+
+    Сообщение об успехе шлёт UserNotifierObserver через EventBus.
+    Здесь только обновляем экран — убираем кнопку 'Я оплатил'.
+    """
     if callback.from_user is None:
         await callback.answer()
         return
@@ -35,17 +40,11 @@ async def mark_order_paid(
         await callback.answer("Заказ не найден или уже оплачен", show_alert=True)
         return
 
-    text = (
-        f"✅ <b>Заказ #{order.id} оплачен</b>\n\n"
-        f"Сумма: <b>{order.total / 100:.2f}₽</b>\n"
-        f"Статус: {STATUS_LABELS[order.status]}\n\n"
-        f"Спасибо! Скоро мы займёмся твоим заказом."
-    )
-
+    # Просто обновим экран этого сообщения, чтобы пользователь видел
+    # что кнопки больше нет. Реальное уведомление прилетит отдельно от Observer.
     if isinstance(callback.message, Message):
-        # Убираем клавиатуру оплаты — больше нечего нажимать
-        await callback.message.edit_text(text)
-    await callback.answer("Оплата принята")
+        await callback.message.edit_text(f"⏳ Обрабатываем оплату заказа <b>#{order.id}</b>...")
+    await callback.answer()
 
 
 # ─── Мои заказы ──────────────────────────────────────────────────
@@ -66,7 +65,7 @@ async def show_my_orders(message: Message, session: AsyncSession) -> None:
     for v in views:
         order = v.order
         lines.append(
-            f"<b>#{order.id}</b> — {STATUS_LABELS.get(order.status, order.status)}\n"
+            f"<b>#{order.id}</b> — {get_order_state(order.status).label}\n"
             f"  Сумма: {order.total / 100:.2f}₽, "
             f"товаров: {v.items_count}\n"
             f"  Создан: {order.created_at.strftime('%d.%m.%Y %H:%M')}"

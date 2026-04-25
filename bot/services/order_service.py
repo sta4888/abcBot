@@ -49,13 +49,7 @@ class OrderService:
         ]
 
     async def create_order_from_builder(self, builder: OrderBuilder) -> Order:
-        """Создаёт заказ по данным билдера и очищает корзину пользователя.
-
-        Всё в одной транзакции (managed by DatabaseMiddleware):
-          1. INSERT orders
-          2. INSERT order_items (через cascade)
-          3. DELETE cart_items
-        """
+        """Создаёт заказ по данным билдера и очищает корзину."""
         order = builder.build()
         self._order_repo.add(order)
         await self._order_repo._session.flush()
@@ -71,23 +65,18 @@ class OrderService:
         return order
 
     async def initiate_payment(self, order: Order) -> "PaymentInitResult":
-        """Инициирует оплату через выбранную стратегию.
-
-        Возвращает данные для отображения пользователю (текст, URL, ...).
-        Сама смена статуса заказа происходит после verify_payment().
-        """
+        """Инициирует оплату через стратегию."""
         from bot.services.payment import get_payment_factory
 
         strategy = get_payment_factory().get(order.payment_method)
         return await strategy.create_payment(order)
 
     async def confirm_payment(self, order_id: int, user_id: int) -> Order | None:
-        """Подтверждает оплату заказа через стратегию.
+        """Подтверждает оплату через стратегию + State-переход new → paid.
 
-        Возвращает Order, если оплата подтверждена и статус сменился на 'paid'.
-        Возвращает None, если:
+        Возвращает Order при успехе, None — если:
         - заказ не найден или принадлежит другому пользователю
-        - заказ не в статусе 'new'
+        - переход недоступен в текущем статусе
         - стратегия не подтвердила оплату
         """
         from bot.services.payment import get_payment_factory
@@ -95,20 +84,70 @@ class OrderService:
         order = await self._order_repo.get_by_id(order_id)
         if order is None or order.user_id != user_id:
             return None
-        if order.status != "new":
-            logger.info(
-                "Order %d cannot transition to paid from status=%s",
-                order_id,
-                order.status,
-            )
-            return None
 
+        # Stage 1: Стратегия проверяет оплату
         strategy = get_payment_factory().get(order.payment_method)
         if not await strategy.verify_payment(order):
             logger.info("Payment not verified for order %d", order_id)
             return None
 
-        order.status = "paid"
+        # Stage 2: State-машина выполняет переход
+        return await self._apply_transition(order, action="pay")
+
+    async def cancel_order(self, order_id: int, user_id: int) -> Order | None:
+        """Отменяет заказ. None — если заказ не найден / переход запрещён."""
+        order = await self._order_repo.get_by_id(order_id)
+        if order is None or order.user_id != user_id:
+            return None
+        return await self._apply_transition(order, action="cancel")
+
+    async def ship_order(self, order_id: int) -> Order | None:
+        """Админский переход paid → shipped. None при ошибке.
+
+        TODO в ит. 7: добавить проверку, что вызывающий — админ.
+        """
+        order = await self._order_repo.get_by_id(order_id)
+        if order is None:
+            return None
+        return await self._apply_transition(order, action="ship")
+
+    async def deliver_order(self, order_id: int) -> Order | None:
+        """Админский переход shipped → delivered."""
+        order = await self._order_repo.get_by_id(order_id)
+        if order is None:
+            return None
+        return await self._apply_transition(order, action="deliver")
+
+    async def _apply_transition(self, order: Order, action: str) -> Order | None:
+        """Применяет State-переход к заказу + публикует событие."""
+        from bot.domain.order_states import (
+            InvalidTransitionError,
+            get_order_state,
+        )
+        from bot.services.events import OrderEvent, get_event_bus
+
+        state = get_order_state(order.status)
+        method = getattr(state, action)
+
+        try:
+            transition = method()
+        except InvalidTransitionError as e:
+            logger.info("Order %d: %s transition refused (%s)", order.id, action, e)
+            return None
+
+        old_status = order.status
+        order.status = transition.new_status
         await self._order_repo._session.flush()
-        logger.info("Order %d marked as paid via %s", order_id, order.payment_method)
+
+        logger.info(
+            "Order %d: %s -> %s (event=%s)",
+            order.id,
+            old_status,
+            transition.new_status,
+            transition.event_name,
+        )
+
+        # Публикуем событие. Подписчики работают со СВОИМИ сессиями.
+        await get_event_bus().publish(OrderEvent(name=transition.event_name, order_id=order.id))
+
         return order

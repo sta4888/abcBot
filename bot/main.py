@@ -10,6 +10,12 @@ from redis.asyncio import Redis
 from bot.config import get_settings
 from bot.handlers import main_router
 from bot.middlewares.db_middleware import DatabaseMiddleware
+from bot.services.events import get_event_bus
+from bot.services.events.observers import (
+    AdminNotifierObserver,
+    LoggingObserver,
+    UserNotifierObserver,
+)
 from bot.utils.logger import setup_logging
 
 logger = logging.getLogger(__name__)
@@ -34,11 +40,19 @@ async def main() -> None:
     )
     dispatcher = Dispatcher(storage=storage)
 
-    # Middleware: один на message, один на callback_query
+    # Middleware
     dispatcher.message.middleware(DatabaseMiddleware())
     dispatcher.callback_query.middleware(DatabaseMiddleware())
 
     dispatcher.include_router(main_router)
+
+    # ─── Регистрация подписчиков EventBus ───
+    event_bus = get_event_bus()
+    event_bus.subscribe(LoggingObserver())
+    event_bus.subscribe(UserNotifierObserver(bot=bot))
+    event_bus.subscribe(AdminNotifierObserver(bot=bot))
+    logger.info("Event observers registered")
+    # ──────────────────────────────────────────
 
     logger.info("Bot starting in polling mode...")
     await bot.delete_webhook(drop_pending_updates=True)
