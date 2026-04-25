@@ -27,7 +27,14 @@ def test_db_modules_import() -> None:
     from bot.db.base import Base  # noqa: F401
     from bot.db.engine import create_engine, create_session_factory  # noqa: F401
     from bot.db.session import get_session_factory  # noqa: F401
-    from bot.models import Category, Product, User  # noqa: F401
+    from bot.models import (  # noqa: F401
+        CartItem,
+        Category,
+        Order,
+        OrderItem,
+        Product,
+        User,
+    )
 
 
 def test_alembic_config_loads() -> None:
