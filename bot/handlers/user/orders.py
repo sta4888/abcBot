@@ -4,9 +4,10 @@ from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.domain.order_states import get_order_state
 from bot.keyboards.callbacks import OrderPayCallback
 from bot.keyboards.user.main_menu import BTN_ORDERS
-from bot.services.order_service import STATUS_LABELS, OrderService
+from bot.services.order_service import OrderService
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ async def mark_order_paid(
     text = (
         f"✅ <b>Заказ #{order.id} оплачен</b>\n\n"
         f"Сумма: <b>{order.total / 100:.2f}₽</b>\n"
-        f"Статус: {STATUS_LABELS[order.status]}\n\n"
+        f"Статус: {get_order_state(order.status).label}\n\n"
         f"Спасибо! Скоро мы займёмся твоим заказом."
     )
 
@@ -66,7 +67,7 @@ async def show_my_orders(message: Message, session: AsyncSession) -> None:
     for v in views:
         order = v.order
         lines.append(
-            f"<b>#{order.id}</b> — {STATUS_LABELS.get(order.status, order.status)}\n"
+            f"<b>#{order.id}</b> — {get_order_state(order.status).label}\n"
             f"  Сумма: {order.total / 100:.2f}₽, "
             f"товаров: {v.items_count}\n"
             f"  Создан: {order.created_at.strftime('%d.%m.%Y %H:%M')}"
