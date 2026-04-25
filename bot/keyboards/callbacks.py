@@ -20,3 +20,9 @@ class ProductCallback(CallbackData, prefix="prod"):
 
 class CatalogBackCallback(CallbackData, prefix="cat_back"):
     """Кнопка 'назад' — возврат к списку категорий."""
+
+
+class AddToCartCallback(CallbackData, prefix="cart_add"):
+    """Нажатие 'Добавить в корзину' на карточке товара."""
+
+    product_id: int

@@ -2,6 +2,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.keyboards.callbacks import (
+    AddToCartCallback,
     CatalogBackCallback,
     CategoryCallback,
     ProductCallback,
@@ -92,6 +93,16 @@ class CatalogKeyboardFactory:
     def product_card(product: Product) -> InlineKeyboardMarkup:
         """Клавиатура карточки товара."""
         builder = InlineKeyboardBuilder()
+
+        # Кнопка 'В корзину' — только если товар в наличии
+        if product.is_in_stock:
+            builder.row(
+                InlineKeyboardButton(
+                    text="🛒 В корзину",
+                    callback_data=AddToCartCallback(product_id=product.id).pack(),
+                )
+            )
+
         builder.row(
             InlineKeyboardButton(
                 text="◀️ К товарам",
