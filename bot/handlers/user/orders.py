@@ -23,7 +23,11 @@ async def mark_order_paid(
     callback_data: OrderPayCallback,
     session: AsyncSession,
 ) -> None:
-    """'Я оплатил' — заглушечный переход new → paid."""
+    """'Я оплатил' — переход new → paid через стратегию + State.
+
+    Сообщение об успехе шлёт UserNotifierObserver через EventBus.
+    Здесь только обновляем экран — убираем кнопку 'Я оплатил'.
+    """
     if callback.from_user is None:
         await callback.answer()
         return
@@ -36,17 +40,11 @@ async def mark_order_paid(
         await callback.answer("Заказ не найден или уже оплачен", show_alert=True)
         return
 
-    text = (
-        f"✅ <b>Заказ #{order.id} оплачен</b>\n\n"
-        f"Сумма: <b>{order.total / 100:.2f}₽</b>\n"
-        f"Статус: {get_order_state(order.status).label}\n\n"
-        f"Спасибо! Скоро мы займёмся твоим заказом."
-    )
-
+    # Просто обновим экран этого сообщения, чтобы пользователь видел
+    # что кнопки больше нет. Реальное уведомление прилетит отдельно от Observer.
     if isinstance(callback.message, Message):
-        # Убираем клавиатуру оплаты — больше нечего нажимать
-        await callback.message.edit_text(text)
-    await callback.answer("Оплата принята")
+        await callback.message.edit_text(f"⏳ Обрабатываем оплату заказа <b>#{order.id}</b>...")
+    await callback.answer()
 
 
 # ─── Мои заказы ──────────────────────────────────────────────────
