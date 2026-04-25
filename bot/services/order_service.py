@@ -6,6 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.models import Order
 from bot.repositories.cart_repository import CartRepository
 from bot.repositories.order_repository import OrderRepository
+from bot.services.order_builder import OrderBuilder
+from bot.services.payment import PaymentInitResult
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +18,16 @@ class OrderSummaryView:
 
     order: Order
     items_count: int
+
+
+# Человекочитаемые названия статусов для UI
+STATUS_LABELS = {
+    "new": "🆕 Новый",
+    "paid": "💰 Оплачен",
+    "shipped": "🚚 Отправлен",
+    "delivered": "✅ Доставлен",
+    "cancelled": "❌ Отменён",
+}
 
 
 class OrderService:
@@ -35,3 +47,68 @@ class OrderService:
             )
             for order in orders
         ]
+
+    async def create_order_from_builder(self, builder: OrderBuilder) -> Order:
+        """Создаёт заказ по данным билдера и очищает корзину пользователя.
+
+        Всё в одной транзакции (managed by DatabaseMiddleware):
+          1. INSERT orders
+          2. INSERT order_items (через cascade)
+          3. DELETE cart_items
+        """
+        order = builder.build()
+        self._order_repo.add(order)
+        await self._order_repo._session.flush()
+
+        await self._cart_repo.clear_user_cart(builder.user_id)
+
+        logger.info(
+            "Order created: id=%d user_id=%d total=%.2f₽",
+            order.id,
+            order.user_id,
+            order.total / 100,
+        )
+        return order
+
+    async def initiate_payment(self, order: Order) -> "PaymentInitResult":
+        """Инициирует оплату через выбранную стратегию.
+
+        Возвращает данные для отображения пользователю (текст, URL, ...).
+        Сама смена статуса заказа происходит после verify_payment().
+        """
+        from bot.services.payment import get_payment_factory
+
+        strategy = get_payment_factory().get(order.payment_method)
+        return await strategy.create_payment(order)
+
+    async def confirm_payment(self, order_id: int, user_id: int) -> Order | None:
+        """Подтверждает оплату заказа через стратегию.
+
+        Возвращает Order, если оплата подтверждена и статус сменился на 'paid'.
+        Возвращает None, если:
+        - заказ не найден или принадлежит другому пользователю
+        - заказ не в статусе 'new'
+        - стратегия не подтвердила оплату
+        """
+        from bot.services.payment import get_payment_factory
+
+        order = await self._order_repo.get_by_id(order_id)
+        if order is None or order.user_id != user_id:
+            return None
+        if order.status != "new":
+            logger.info(
+                "Order %d cannot transition to paid from status=%s",
+                order_id,
+                order.status,
+            )
+            return None
+
+        strategy = get_payment_factory().get(order.payment_method)
+        if not await strategy.verify_payment(order):
+            logger.info("Payment not verified for order %d", order_id)
+            return None
+
+        order.status = "paid"
+        await self._order_repo._session.flush()
+        logger.info("Order %d marked as paid via %s", order_id, order.payment_method)
+        return order

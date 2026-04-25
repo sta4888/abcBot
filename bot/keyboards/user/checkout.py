@@ -3,6 +3,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.keyboards.callbacks import (
     CheckoutCancelCallback,
+    CheckoutConfirmCallback,
     CheckoutDeliveryCallback,
     CheckoutPaymentCallback,
     CheckoutSkipCommentCallback,
@@ -81,6 +82,24 @@ class CheckoutKeyboardFactory:
             InlineKeyboardButton(
                 text="⏭ Без комментария",
                 callback_data=CheckoutSkipCommentCallback().pack(),
+            )
+        )
+        builder.row(
+            InlineKeyboardButton(
+                text="❌ Отменить",
+                callback_data=CheckoutCancelCallback().pack(),
+            )
+        )
+        return builder.as_markup()
+
+    @staticmethod
+    def confirmation() -> InlineKeyboardMarkup:
+        """Шаг подтверждения: 'Подтвердить' / 'Отменить'."""
+        builder = InlineKeyboardBuilder()
+        builder.row(
+            InlineKeyboardButton(
+                text="✅ Подтвердить заказ",
+                callback_data=CheckoutConfirmCallback().pack(),
             )
         )
         builder.row(

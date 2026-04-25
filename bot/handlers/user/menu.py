@@ -3,18 +3,11 @@ import logging
 from aiogram import F, Router
 from aiogram.types import Message
 
-from bot.keyboards.user.main_menu import BTN_HELP, BTN_ORDERS
+from bot.keyboards.user.main_menu import BTN_HELP
 
 logger = logging.getLogger(__name__)
 
 router = Router(name="user.menu")
-
-
-@router.message(F.text == BTN_ORDERS)
-async def on_orders_click(message: Message) -> None:
-    """Нажатие 'Мои заказы' — заглушка."""
-    logger.info("User %s clicked Orders", message.from_user.id if message.from_user else "?")
-    await message.answer("У тебя пока нет заказов.")
 
 
 @router.message(F.text == BTN_HELP)
