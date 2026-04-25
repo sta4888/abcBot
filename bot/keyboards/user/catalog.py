@@ -2,63 +2,107 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.keyboards.callbacks import (
+    AddToCartCallback,
     CatalogBackCallback,
     CategoryCallback,
     ProductCallback,
 )
 from bot.models import Category, Product
+from bot.utils.pagination import Page
 
 
 class CatalogKeyboardFactory:
-    """Фабрика клавиатур каталога.
-
-    Каждый метод — это отдельный Factory Method для конкретного экрана.
-    Все они возвращают готовый InlineKeyboardMarkup, который хендлер прикрепляет к сообщению.
-    """
+    """Фабрика клавиатур каталога — один источник истины для UI каталога."""
 
     @staticmethod
     def categories_list(categories: list[Category]) -> InlineKeyboardMarkup:
-        """Клавиатура со списком категорий — по одной в строке."""
+        """Список категорий — по одной в строке."""
         builder = InlineKeyboardBuilder()
         for cat in categories:
             builder.button(
                 text=cat.name,
                 callback_data=CategoryCallback(category_id=cat.id),
             )
-        builder.adjust(1)  # по одной кнопке в ряду
+        builder.adjust(1)
         return builder.as_markup()
 
     @staticmethod
     def products_list(
-        products: list[Product],
-        show_back_button: bool = True,
+        category_id: int,
+        products_page: Page[Product],
     ) -> InlineKeyboardMarkup:
-        """Клавиатура со списком товаров в категории."""
+        """Список товаров с пагинацией."""
         builder = InlineKeyboardBuilder()
-        for prod in products:
+
+        # Сами товары — каждый своей строкой
+        for prod in products_page.items:
             builder.button(
                 text=f"{prod.name} — {prod.price_rub:.0f}₽",
                 callback_data=ProductCallback(product_id=prod.id),
             )
         builder.adjust(1)
 
-        if show_back_button:
-            builder.row(
+        # Ряд пагинации — если есть больше одной страницы
+        if products_page.total_pages > 1:
+            pagination_row: list[InlineKeyboardButton] = []
+
+            if products_page.has_prev:
+                pagination_row.append(
+                    InlineKeyboardButton(
+                        text="‹",
+                        callback_data=CategoryCallback(
+                            category_id=category_id,
+                            page=products_page.page - 1,
+                        ).pack(),
+                    )
+                )
+
+            # Индикатор страницы — не кликабельный, просто информация.
+            # callback_data="noop" — placeholder, хендлер на него не реагирует
+            pagination_row.append(
                 InlineKeyboardButton(
-                    text="◀️ К категориям",
-                    callback_data=CatalogBackCallback().pack(),
+                    text=f"{products_page.page + 1}/{products_page.total_pages}",
+                    callback_data="noop",
                 )
             )
+
+            if products_page.has_next:
+                pagination_row.append(
+                    InlineKeyboardButton(
+                        text="›",
+                        callback_data=CategoryCallback(
+                            category_id=category_id,
+                            page=products_page.page + 1,
+                        ).pack(),
+                    )
+                )
+
+            builder.row(*pagination_row)
+
+        # Кнопка 'назад' к категориям — всегда последняя
+        builder.row(
+            InlineKeyboardButton(
+                text="◀️ К категориям",
+                callback_data=CatalogBackCallback().pack(),
+            )
+        )
 
         return builder.as_markup()
 
     @staticmethod
     def product_card(product: Product) -> InlineKeyboardMarkup:
-        """Клавиатура под карточкой товара.
-
-        Пока только 'Назад', позже сюда добавим 'В корзину', '+/-', и т.п.
-        """
+        """Клавиатура карточки товара."""
         builder = InlineKeyboardBuilder()
+
+        # Кнопка 'В корзину' — только если товар в наличии
+        if product.is_in_stock:
+            builder.row(
+                InlineKeyboardButton(
+                    text="🛒 В корзину",
+                    callback_data=AddToCartCallback(product_id=product.id).pack(),
+                )
+            )
+
         builder.row(
             InlineKeyboardButton(
                 text="◀️ К товарам",

@@ -11,22 +11,17 @@ from bot.keyboards.callbacks import (
 )
 from bot.keyboards.user.catalog import CatalogKeyboardFactory
 from bot.keyboards.user.main_menu import BTN_CATALOG
-from bot.repositories.category_repository import CategoryRepository
-from bot.repositories.product_repository import ProductRepository
+from bot.services.catalog_service import CatalogService
 
 logger = logging.getLogger(__name__)
 
 router = Router(name="user.catalog")
 
-# Пока без пагинации — показываем все товары категории разом.
-# Пагинация появится в этапе 3.
-PRODUCTS_LIMIT = 50
-
 
 @router.message(F.text == BTN_CATALOG)
 async def show_catalog(message: Message, session: AsyncSession) -> None:
     """Пользователь нажал кнопку 'Каталог' → показываем категории."""
-    categories = await CategoryRepository(session).list_active()
+    categories = await CatalogService(session).list_categories()
     if not categories:
         await message.answer("В магазине пока нет категорий 😔")
         return
@@ -41,31 +36,25 @@ async def show_category(
     callback_data: CategoryCallback,
     session: AsyncSession,
 ) -> None:
-    """Пользователь выбрал категорию → показываем товары."""
-    category_repo = CategoryRepository(session)
-    product_repo = ProductRepository(session)
-
-    category = await category_repo.get_by_id(callback_data.category_id)
-    if category is None:
+    """Пользователь выбрал категорию или листает её страницы → показываем товары."""
+    view = await CatalogService(session).get_category_page(
+        category_id=callback_data.category_id,
+        page=callback_data.page,
+    )
+    if view is None:
         await callback.answer("Категория не найдена", show_alert=True)
         return
 
-    products = await product_repo.list_by_category(
-        category_id=category.id,
-        limit=PRODUCTS_LIMIT,
-        offset=0,
+    if not view.products_page.items:
+        text = f"В категории <b>{view.category.name}</b> пока нет товаров."
+    else:
+        text = f"<b>{view.category.name}</b>\nВыбери товар:"
+
+    kb = CatalogKeyboardFactory.products_list(
+        category_id=view.category.id,
+        products_page=view.products_page,
     )
 
-    if not products:
-        text = f"В категории <b>{category.name}</b> пока нет товаров."
-    else:
-        text = f"<b>{category.name}</b>\nВыбери товар:"
-
-    kb = CatalogKeyboardFactory.products_list(products)
-
-    # Редактируем сообщение вместо отправки нового — так чат не мусорится.
-    # isinstance-проверка нужна из-за типа Message | InaccessibleMessage | None:
-    # старые (48ч+) или удалённые сообщения нельзя редактировать.
     if isinstance(callback.message, Message):
         await callback.message.edit_text(text, reply_markup=kb)
     await callback.answer()
@@ -78,7 +67,7 @@ async def show_product(
     session: AsyncSession,
 ) -> None:
     """Пользователь открыл карточку товара."""
-    product = await ProductRepository(session).get_by_id(callback_data.product_id)
+    product = await CatalogService(session).get_product(callback_data.product_id)
     if product is None:
         await callback.answer("Товар не найден", show_alert=True)
         return
@@ -103,9 +92,15 @@ async def back_to_categories(
     session: AsyncSession,
 ) -> None:
     """Кнопка 'Назад' на списке товаров — возврат к категориям."""
-    categories = await CategoryRepository(session).list_active()
+    categories = await CatalogService(session).list_categories()
     kb = CatalogKeyboardFactory.categories_list(categories)
 
     if isinstance(callback.message, Message):
         await callback.message.edit_text("Выбери категорию:", reply_markup=kb)
+    await callback.answer()
+
+
+@router.callback_query(F.data == "noop")
+async def noop_handler(callback: CallbackQuery) -> None:
+    """Индикатор страницы пагинации — кнопка не должна ничего делать."""
     await callback.answer()

@@ -2,9 +2,14 @@ from aiogram.filters.callback_data import CallbackData
 
 
 class CategoryCallback(CallbackData, prefix="cat"):
-    """Нажатие на категорию в списке."""
+    """Нажатие на категорию — открыть её страницу товаров.
+
+    page: индекс страницы (с 0). При нажатии на категорию из списка — 0.
+    При пагинации — 1, 2, и т.д.
+    """
 
     category_id: int
+    page: int = 0
 
 
 class ProductCallback(CallbackData, prefix="prod"):
@@ -15,3 +20,9 @@ class ProductCallback(CallbackData, prefix="prod"):
 
 class CatalogBackCallback(CallbackData, prefix="cat_back"):
     """Кнопка 'назад' — возврат к списку категорий."""
+
+
+class AddToCartCallback(CallbackData, prefix="cart_add"):
+    """Нажатие 'Добавить в корзину' на карточке товара."""
+
+    product_id: int
