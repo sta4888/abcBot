@@ -21,6 +21,7 @@ from bot.keyboards.callbacks import (
 )
 from bot.keyboards.user.catalog import CatalogKeyboardFactory
 from bot.keyboards.user.main_menu import BTN_CATALOG
+from bot.services.cart_service import CartService
 from bot.services.catalog_service import CatalogService, CategoryView
 
 logger = logging.getLogger(__name__)
@@ -93,13 +94,18 @@ async def show_product(
     session: AsyncSession,
 ) -> None:
     """Открыть классическую карточку товара (текстовую) из списка."""
+    if callback.from_user is None:
+        await callback.answer()
+        return
+
     product = await CatalogService(session).get_product(callback_data.product_id)
     if product is None:
         await callback.answer("Товар не найден", show_alert=True)
         return
 
+    cart_count = await CartService(session).get_items_count(callback.from_user.id)
     text = _render_product_text(product)
-    kb = CatalogKeyboardFactory.product_card(product)
+    kb = CatalogKeyboardFactory.product_card(product, cart_items_count=cart_count)
 
     if isinstance(callback.message, Message):
         if callback.message.photo:
@@ -120,6 +126,10 @@ async def show_product_card(
     session: AsyncSession,
 ) -> None:
     """Открыть/перелистать карточку товара в режиме слайдера с фото."""
+    if callback.from_user is None:
+        await callback.answer()
+        return
+
     view = await CatalogService(session).get_product_card(
         category_id=callback_data.category_id,
         page=callback_data.page,
@@ -128,8 +138,9 @@ async def show_product_card(
         await callback.answer("Товар не найден", show_alert=True)
         return
 
+    cart_count = await CartService(session).get_items_count(callback.from_user.id)
     caption = _render_product_text(view.product)
-    kb = CatalogKeyboardFactory.product_slider_card(view)
+    kb = CatalogKeyboardFactory.product_slider_card(view, cart_items_count=cart_count)
     photo = view.product.image_file_id or get_settings().product_placeholder_file_id
 
     if not photo:
