@@ -175,8 +175,17 @@ class OrderService:
             return None
         return await self._apply_transition(order, action="deliver")
 
-    async def _apply_transition(self, order: Order, action: str) -> Order | None:
-        """Применяет State-переход к заказу + публикует событие."""
+    async def _apply_transition(
+        self,
+        order: Order,
+        action: str,
+        **action_kwargs: object,
+    ) -> Order | None:
+        """Применяет State-переход к заказу + публикует событие.
+
+        action — имя метода в OrderState ('pay', 'ship', 'revert_ship', ...).
+        action_kwargs — дополнительные аргументы метода (например, previous_status).
+        """
         from bot.domain.order_states import (
             InvalidTransitionError,
             get_order_state,
@@ -184,10 +193,13 @@ class OrderService:
         from bot.services.events import OrderEvent, get_event_bus
 
         state = get_order_state(order.status)
-        method = getattr(state, action)
+        method = getattr(state, action, None)
+        if method is None:
+            logger.warning("Unknown action: %s", action)
+            return None
 
         try:
-            transition = method()
+            transition = method(**action_kwargs)
         except InvalidTransitionError as e:
             logger.info("Order %d: %s transition refused (%s)", order.id, action, e)
             return None
@@ -204,7 +216,6 @@ class OrderService:
             transition.event_name,
         )
 
-        # Публикуем событие. Подписчики работают со СВОИМИ сессиями.
         await get_event_bus().publish(OrderEvent(name=transition.event_name, order_id=order.id))
 
         return order

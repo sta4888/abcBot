@@ -17,6 +17,15 @@ from bot.keyboards.callbacks import (
     AdminOrderViewCallback,
 )
 from bot.services.admin_order_service import AdminOrderService
+from bot.services.commands import (
+    AdminCancelOrderCommand,
+    DeliverOrderCommand,
+    ShipOrderCommand,
+    get_command_history,
+)
+from bot.services.commands import (
+    Command as OrderCommand,
+)
 from bot.services.order_service import OrderService
 
 logger = logging.getLogger(__name__)
@@ -87,31 +96,52 @@ async def apply_order_action(
     callback_data: AdminOrderActionCallback,
     session: AsyncSession,
 ) -> None:
-    """Применить ship/deliver/cancel — переход через State + Observer."""
-    order_service = OrderService(session)
+    """Применить ship/deliver/cancel — через Command + History."""
+    if callback.from_user is None:
+        await callback.answer()
+        return
+
     action = callback_data.action
 
+    command: OrderCommand
     if action == "ship":
-        order = await order_service.ship_order(callback_data.order_id)
+        command = ShipOrderCommand(
+            order_id=callback_data.order_id,
+            executor_user_id=callback.from_user.id,
+        )
     elif action == "deliver":
-        order = await order_service.deliver_order(callback_data.order_id)
+        command = DeliverOrderCommand(
+            order_id=callback_data.order_id,
+            executor_user_id=callback.from_user.id,
+        )
     elif action == "cancel":
-        # cancel_order требует user_id (для проверки владения).
-        # Админу нужно отменять любой — обходим через прямой переход.
-        # Это допустимо: админ имеет привилегию.
-        order = await _admin_cancel_order(order_service, callback_data.order_id)
+        command = AdminCancelOrderCommand(
+            order_id=callback_data.order_id,
+            executor_user_id=callback.from_user.id,
+        )
     else:
         await callback.answer("Неизвестное действие", show_alert=True)
         return
 
-    if order is None:
+    # bind свежую сессию из middleware
+    command.bind_session(session)
+
+    success = await command.execute()
+    if not success:
         await callback.answer(
             "Не получилось — переход не разрешён в текущем статусе",
             show_alert=True,
         )
         return
 
-    # Перерисовать карточку
+    get_command_history().push(command)
+
+    order_service = OrderService(session)
+    order = await order_service._order_repo.get_by_id(callback_data.order_id)
+    if order is None:
+        await callback.answer()
+        return
+
     text = _format_order_card(order)
     kb = AdminOrdersKeyboardFactory.order_card(order)
     if isinstance(callback.message, Message):
@@ -227,3 +257,32 @@ async def mock_yookassa_webhook(
         f"✅ Webhook эмулирован: заказ #{order_id} переведён в paid.\n"
         f"Пользователю отправлено уведомление через Observer."
     )
+
+
+@router.message(Command("admin_undo"))
+async def admin_undo_last(message: Message, session: AsyncSession) -> None:
+    """Отменить последнее своё админское действие."""
+    if message.from_user is None:
+        return
+
+    history = get_command_history()
+    last = history.peek(message.from_user.id)
+    if last is None:
+        await message.answer("У тебя нет действий для отмены.\nСначала сделай что-нибудь через карточку заказа.")
+        return
+
+    command = history.pop(message.from_user.id)
+    if command is None:
+        return
+
+    # Привязываем свежую сессию из текущего апдейта
+    command.bind_session(session)
+
+    success = await command.undo()
+    if not success:
+        await message.answer(
+            f"❌ Не удалось откатить: <code>{command.summary}</code>\nВозможно, состояние заказа изменилось."
+        )
+        return
+
+    await message.answer(f"↩️ Отменено: <code>{command.summary}</code>")

@@ -159,3 +159,30 @@ def test_cancel_from_paid() -> None:
     state = PaidOrderState()
     t = state.cancel()
     assert t.new_status == "cancelled"
+
+
+class TestRevertTransitions:
+    """Тесты обратных переходов для Undo."""
+
+    def test_shipped_can_revert_to_paid(self) -> None:
+        t = ShippedOrderState().revert_ship()
+        assert t.new_status == "paid"
+        assert t.event_name == "order.ship_reverted"
+
+    def test_delivered_can_revert_to_shipped(self) -> None:
+        t = DeliveredOrderState().revert_deliver()
+        assert t.new_status == "shipped"
+
+    def test_cancelled_can_revert_to_previous(self) -> None:
+        t = CancelledOrderState().revert_cancel("paid")
+        assert t.new_status == "paid"
+
+    def test_cancelled_cannot_revert_to_terminal(self) -> None:
+        with pytest.raises(ValueError):
+            CancelledOrderState().revert_cancel("delivered")
+
+    def test_new_cannot_revert(self) -> None:
+        from bot.domain.order_states import InvalidTransitionError
+
+        with pytest.raises(InvalidTransitionError):
+            NewOrderState().revert_ship()
