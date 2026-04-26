@@ -93,3 +93,19 @@ class OrderPayCallback(CallbackData, prefix="order_pay"):
     """'Я оплатил' для конкретного заказа (заглушечная оплата)."""
 
     order_id: int
+
+
+class OrderCancelRequestCallback(CallbackData, prefix="ord_cancel_q"):
+    """Запрос на отмену заказа — показать диалог подтверждения."""
+
+    order_id: int
+
+
+class OrderCancelConfirmCallback(CallbackData, prefix="ord_cancel_y"):
+    """Подтверждение отмены заказа."""
+
+    order_id: int
+
+
+class OrderCancelDismissCallback(CallbackData, prefix="ord_cancel_n"):
+    """Отказ от отмены — вернуться к списку заказов."""
