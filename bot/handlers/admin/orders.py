@@ -3,6 +3,7 @@ from contextlib import suppress
 
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
+from aiogram.filters import Command, CommandObject
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -156,4 +157,73 @@ def _format_order_card(order) -> str:  # type: ignore[no-untyped-def]
         f"<b>Адрес:</b> <code>{order.delivery_address}</code>\n"
         f"<b>Телефон:</b> <code>{order.contact_phone}</code>\n"
         f"<b>Оплата:</b> {order.payment_method}" + (f"\n<b>Комментарий:</b> {order.comment}" if order.comment else "")
+    )
+
+
+# ─── Mock-webhook для YooKassa ────────────────────────────────
+
+
+@router.message(Command("mock_pay"))
+async def mock_yookassa_webhook(
+    message: Message,
+    command: CommandObject,
+    session: AsyncSession,
+) -> None:
+    """Эмуляция webhook ЮKassa: 'пользователь оплатил инвойс'.
+
+    В реальном проекте такой код живёт в HTTP-эндпоинте и вызывается
+    провайдером. Здесь — админская команда для учебных целей.
+    """
+    if command.args is None:
+        await message.answer("Использование: <code>/mock_pay &lt;order_id&gt;</code>")
+        return
+
+    try:
+        order_id = int(command.args.strip())
+    except ValueError:
+        await message.answer("order_id должен быть числом.")
+        return
+
+    order_service = OrderService(session)
+    order = await order_service._order_repo.get_by_id(order_id)
+    if order is None:
+        await message.answer(f"❌ Заказ #{order_id} не найден.")
+        return
+
+    if order.payment_method != "yookassa":
+        await message.answer(
+            f"⚠️ Заказ #{order_id} оплачивается через "
+            f"<b>{order.payment_method}</b>, а не yookassa.\n"
+            f"Команда /mock_pay только для yookassa."
+        )
+        return
+
+    if order.status != "new":
+        await message.answer(f"⚠️ Заказ #{order_id} уже не в статусе 'new' (текущий: {order.status}).")
+        return
+
+    # Шаг 1: эмулируем оплату на стороне SDK
+    from bot.services.payment import get_payment_factory
+    from bot.services.payment.yookassa_strategy import YooKassaPaymentStrategy
+
+    strategy = get_payment_factory().get("yookassa")
+    if not isinstance(strategy, YooKassaPaymentStrategy):
+        await message.answer("❌ YooKassa-стратегия не зарегистрирована")
+        return
+
+    success = await strategy.simulate_webhook_payment(order_id)
+    if not success:
+        await message.answer("❌ Не удалось пометить инвойс оплаченным (возможно, инвойс не создан или уже оплачен).")
+        return
+
+    # Шаг 2: подтверждаем оплату через стандартный flow.
+    # Это и есть webhook handler в учебной форме.
+    confirmed = await order_service.confirm_payment(order_id=order_id, user_id=order.user_id)
+    if confirmed is None:
+        await message.answer("❌ Стратегия пометила оплату, но State не разрешил переход. Странно — посмотри логи.")
+        return
+
+    await message.answer(
+        f"✅ Webhook эмулирован: заказ #{order_id} переведён в paid.\n"
+        f"Пользователю отправлено уведомление через Observer."
     )

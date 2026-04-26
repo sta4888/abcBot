@@ -32,5 +32,20 @@ jobs:
       - name: Mypy
         run: uv run mypy .
 
+      - name: Create .env for tests
+        run: |
+          cat > .env <<EOF
+          BOT__TOKEN=test_token_does_not_matter
+          POSTGRES__HOST=localhost
+          POSTGRES__PORT=5432
+          POSTGRES__USER=test
+          POSTGRES__PASSWORD=test
+          POSTGRES__DB=test
+          REDIS__HOST=localhost
+          REDIS__PORT=6379
+          REDIS__DB=0
+          YOOKASSA_ENABLED=false
+          EOF
+
       - name: Pytest
         run: uv run pytest

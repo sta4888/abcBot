@@ -57,19 +57,19 @@ def test_fake_method_key() -> None:
 
 
 def test_factory_returns_fake_for_known_method() -> None:
-    factory = PaymentStrategyFactory()
+    factory = PaymentStrategyFactory(yookassa_enabled=False)
     strategy = factory.get("fake")
     assert isinstance(strategy, FakePaymentStrategy)
 
 
 def test_factory_raises_for_unknown_method() -> None:
-    factory = PaymentStrategyFactory()
+    factory = PaymentStrategyFactory(yookassa_enabled=False)
     with pytest.raises(KeyError, match="Unknown payment method"):
         factory.get("bitcoin")
 
 
 def test_factory_lists_available_methods() -> None:
-    factory = PaymentStrategyFactory()
+    factory = PaymentStrategyFactory(yookassa_enabled=False)
     assert "fake" in factory.available_methods()
 
 
@@ -85,7 +85,7 @@ def test_factory_register_custom_strategy() -> None:
         async def verify_payment(self, order: Order) -> bool:
             return False
 
-    factory = PaymentStrategyFactory()
+    factory = PaymentStrategyFactory(yookassa_enabled=False)
     factory.register(CustomStrategy())
 
     strategy = factory.get("custom")
@@ -97,6 +97,16 @@ def test_factory_register_custom_strategy() -> None:
 
 
 def test_get_payment_factory_returns_same_instance() -> None:
+    """Singleton-семантика lru_cache.
+
+    Этот тест требует валидного .env (читает Settings).
+    В CI без .env пропускаем — остальная Factory покрыта без зависимости от конфига.
+    """
+    import os
+
+    if not os.getenv("BOT__TOKEN"):
+        pytest.skip("Skipping: requires .env (BOT__TOKEN not set)")
+
     factory1 = get_payment_factory()
     factory2 = get_payment_factory()
-    assert factory1 is factory2  # lru_cache гарантирует
+    assert factory1 is factory2

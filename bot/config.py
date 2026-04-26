@@ -39,7 +39,7 @@ class RedisConfig(BaseModel):
 
 
 class Settings(BaseSettings):
-    """Корневой объект настроек — все конфиги в одном месте."""
+    """Корневой объект настроек."""
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -56,6 +56,7 @@ class Settings(BaseSettings):
     debug: bool = False
     sql_echo: bool = False
     product_placeholder_file_id: str = ""
+    yookassa_enabled: bool = False
 
 
 @lru_cache(maxsize=1)
