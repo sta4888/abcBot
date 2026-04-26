@@ -1,6 +1,5 @@
 import logging
 
-from bot.config import get_settings
 from bot.services.payment.base import PaymentStrategy
 from bot.services.payment.fake import FakePaymentStrategy
 
@@ -10,20 +9,26 @@ logger = logging.getLogger(__name__)
 class PaymentStrategyFactory:
     """Factory для получения платёжной стратегии по ключу."""
 
-    def __init__(self) -> None:
-        self._strategies: dict[str, PaymentStrategy] = {}
-        self._register_default()
+    def __init__(self, yookassa_enabled: bool | None = None) -> None:
+        """Создаёт фабрику.
 
-    def _register_default(self) -> None:
-        """Регистрирует все включённые стратегии.
-
-        Fake — всегда. YooKassa — по флагу в конфиге.
+        yookassa_enabled — None означает 'читать из конфига'.
+        Явное True/False позволяет создать фабрику для тестов без .env.
         """
+        self._strategies: dict[str, PaymentStrategy] = {}
+        self._register_default(yookassa_enabled)
+
+    def _register_default(self, yookassa_enabled: bool | None) -> None:
+        """Регистрирует все включённые стратегии."""
         self.register(FakePaymentStrategy())
 
-        if get_settings().yookassa_enabled:
-            # Импорт внутри: если флаг выключен — модуль не дёргается.
-            # Не критично для перформанса, но красиво показывает изоляцию.
+        # Определяем флаг: если не передан явно — читаем из конфига
+        if yookassa_enabled is None:
+            from bot.config import get_settings
+
+            yookassa_enabled = get_settings().yookassa_enabled
+
+        if yookassa_enabled:
             from bot.services.payment import get_yookassa_client
             from bot.services.payment.yookassa_strategy import (
                 YooKassaPaymentStrategy,
