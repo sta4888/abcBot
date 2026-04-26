@@ -64,3 +64,11 @@ def test_logger_setup_works() -> None:
 
     root = logging.getLogger()
     assert len(root.handlers) == 1
+
+
+def test_stock_errors_importable() -> None:
+    """Проверка, что новые ошибки доступны."""
+    from bot.services.order_service import (  # noqa: F401
+        InsufficientStockError,
+        ProductNotFoundError,
+    )

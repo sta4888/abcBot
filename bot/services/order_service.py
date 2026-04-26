@@ -7,6 +7,7 @@ from bot.config import get_settings
 from bot.models import Order
 from bot.repositories.cart_repository import CartRepository
 from bot.repositories.order_repository import OrderRepository
+from bot.repositories.product_repository import ProductRepository
 from bot.services.discounts import (
     BaseTotal,
     LoyaltyDiscount,
@@ -30,14 +31,24 @@ class OrderSummaryView:
     items_count: int
 
 
-# Человекочитаемые названия статусов для UI
-STATUS_LABELS = {
-    "new": "🆕 Новый",
-    "paid": "💰 Оплачен",
-    "shipped": "🚚 Отправлен",
-    "delivered": "✅ Доставлен",
-    "cancelled": "❌ Отменён",
-}
+# ─── Кастомные исключения ─────────────────────────────────────────
+
+
+class InsufficientStockError(Exception):
+    """Не хватает остатков для создания заказа."""
+
+    def __init__(self, product_name: str, available: int, requested: int) -> None:
+        self.product_name = product_name
+        self.available = available
+        self.requested = requested
+        super().__init__(f"Недостаточно товара {product_name!r}: доступно {available}, запрошено {requested}")
+
+
+class ProductNotFoundError(Exception):
+    """Товар, указанный в заказе, не найден в БД."""
+
+
+# ─── Сервис ───────────────────────────────────────────────────────
 
 
 class OrderService:
@@ -46,6 +57,7 @@ class OrderService:
     def __init__(self, session: AsyncSession) -> None:
         self._order_repo = OrderRepository(session)
         self._cart_repo = CartRepository(session)
+        self._product_repo = ProductRepository(session)
 
     async def list_user_orders(self, user_id: int) -> list[OrderSummaryView]:
         """Возвращает заказы пользователя для экрана 'Мои заказы'."""
@@ -59,21 +71,27 @@ class OrderService:
         ]
 
     async def create_order_from_builder(self, builder: OrderBuilder) -> Order:
-        """Создаёт заказ по данным билдера и очищает корзину пользователя.
+        """Создаёт заказ с проверкой и списанием остатков.
 
-        Применяет цепочку скидок (Decorator) к итогу:
-            BaseTotal → PromoCode → Seasonal → Loyalty → MinimumGuard
+        Все шаги в одной транзакции (managed by DatabaseMiddleware):
+          1. Для каждой позиции: SELECT FOR UPDATE Product
+          2. Проверить stock >= quantity, иначе InsufficientStockError
+          3. Уменьшить stock
+          4. INSERT orders + items
+          5. DELETE cart_items
+
+        Если что-то падает — middleware откатывает всё.
         """
-        # 1. Строим Order через Builder (он считает item-ы как раньше)
+        # 1-3: проверка и списание остатков ДО создания заказа
+        await self._reserve_stock(builder)
+
+        # 4: создание заказа через Builder
         order = builder.build()
-
-        # 2. Пересчитываем total через цепочку Decorator
         order.total = await self._calculate_total_with_discounts(builder)
-
-        # 3. Сохраняем
         self._order_repo.add(order)
         await self._order_repo._session.flush()
 
+        # 5: очистка корзины
         await self._cart_repo.clear_user_cart(builder.user_id)
 
         logger.info(
@@ -83,6 +101,34 @@ class OrderService:
             order.total / 100,
         )
         return order
+
+    async def _reserve_stock(self, builder: OrderBuilder) -> None:
+        """Резервирование (списание) остатков.
+
+        Бросает InsufficientStockError, если товара недостаточно.
+        Бросает ProductNotFoundError, если товар удалён.
+        SELECT FOR UPDATE защищает от гонок.
+        """
+        for spec in builder.items:
+            product = await self._product_repo.get_for_update(spec.product_id)
+            if product is None:
+                raise ProductNotFoundError(f"Товар #{spec.product_id} больше недоступен")
+
+            if product.stock < spec.quantity:
+                raise InsufficientStockError(
+                    product_name=product.name,
+                    available=product.stock,
+                    requested=spec.quantity,
+                )
+
+            product.stock -= spec.quantity
+            logger.info(
+                "Reserved %d × product_id=%d (was %d, now %d)",
+                spec.quantity,
+                product.id,
+                product.stock + spec.quantity,
+                product.stock,
+            )
 
     async def _calculate_total_with_discounts(self, builder: OrderBuilder) -> int:
         """Собирает цепочку Decorator и считает итог.

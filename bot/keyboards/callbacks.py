@@ -205,3 +205,13 @@ class AdminOrderActionCallback(CallbackData, prefix="adm_ord_a"):
 
 class CheckoutSkipPromoCallback(CallbackData, prefix="ck_skip_promo"):
     """Пропустить ввод промокода."""
+
+
+class UserOrderViewCallback(CallbackData, prefix="usr_ord_v"):
+    """Открыть карточку конкретного заказа пользователя."""
+
+    order_id: int
+
+
+class UserOrdersListCallback(CallbackData, prefix="usr_ords_l"):
+    """Возврат к списку заказов из карточки."""
