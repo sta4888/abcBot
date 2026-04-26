@@ -1,17 +1,23 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from bot.domain.order_states import OrderState, get_order_state
+from bot.domain.order_states import (
+    InvalidTransitionError,
+    OrderState,
+    get_order_state,
+)
 from bot.keyboards.callbacks import (
     OrderCancelConfirmCallback,
     OrderCancelDismissCallback,
     OrderCancelRequestCallback,
     OrderPayCallback,
+    UserOrdersListCallback,
+    UserOrderViewCallback,
 )
 
 
 class OrdersKeyboardFactory:
-    """Фабрика клавиатур для экранов заказов."""
+    """Фабрика клавиатур для пользовательских экранов заказов."""
 
     @staticmethod
     def pay_action(order_id: int) -> InlineKeyboardMarkup:
@@ -26,25 +32,61 @@ class OrdersKeyboardFactory:
         return builder.as_markup()
 
     @staticmethod
-    def my_orders_actions(orders: list[tuple[int, str]]) -> InlineKeyboardMarkup:
-        """Клавиатура для экрана 'Мои заказы'.
+    def payment_url_action(payment_url: str) -> InlineKeyboardMarkup:
+        """Кнопка 'Оплатить' с переходом по URL платёжки."""
+        builder = InlineKeyboardBuilder()
+        builder.row(InlineKeyboardButton(text="💳 Оплатить", url=payment_url))
+        return builder.as_markup()
 
-        orders — список (order_id, status). Для каждого активного заказа
-        (не терминального) добавляется кнопка 'Отменить'.
+    @staticmethod
+    def my_orders_list(orders: list) -> InlineKeyboardMarkup:  # type: ignore[type-arg]
+        """Список заказов: каждый — кликабельная кнопка для открытия карточки."""
+        builder = InlineKeyboardBuilder()
+        for v in orders:
+            order = v.order
+            state = get_order_state(order.status)
+            builder.row(
+                InlineKeyboardButton(
+                    text=(f"#{order.id} • {state.label} • {order.total / 100:.0f}₽"),
+                    callback_data=UserOrderViewCallback(order_id=order.id).pack(),
+                )
+            )
+        return builder.as_markup()
 
-        Источник истины — State: добавляем кнопку только если разрешена
-        отмена в текущем статусе. Если State меняется — UI следует автоматически.
+    @staticmethod
+    def order_card(order) -> InlineKeyboardMarkup:  # type: ignore[no-untyped-def]
+        """Карточка заказа пользователя.
+
+        Кнопка 'Отменить' — только если State разрешает (через TellDontAsk).
         """
         builder = InlineKeyboardBuilder()
-        for order_id, status in orders:
-            state = get_order_state(status)
-            if OrdersKeyboardFactory._can_cancel(state):
-                builder.row(
-                    InlineKeyboardButton(
-                        text=f"❌ Отменить #{order_id}",
-                        callback_data=OrderCancelRequestCallback(order_id=order_id).pack(),
-                    )
+        state = get_order_state(order.status)
+
+        # Если заказ ещё не оплачен — кнопка оплаты
+        if order.status == "new":
+            builder.row(
+                InlineKeyboardButton(
+                    text="💰 Я оплатил",
+                    callback_data=OrderPayCallback(order_id=order.id).pack(),
                 )
+            )
+
+        # Отмена — если State разрешает
+        if OrdersKeyboardFactory._can_cancel(state):
+            builder.row(
+                InlineKeyboardButton(
+                    text="❌ Отменить заказ",
+                    callback_data=OrderCancelRequestCallback(order_id=order.id).pack(),
+                )
+            )
+
+        # Возврат к списку
+        builder.row(
+            InlineKeyboardButton(
+                text="◀️ К заказам",
+                callback_data=UserOrdersListCallback().pack(),
+            )
+        )
         return builder.as_markup()
 
     @staticmethod
@@ -65,22 +107,9 @@ class OrdersKeyboardFactory:
 
     @staticmethod
     def _can_cancel(state: OrderState) -> bool:
-        """Можно ли отменить заказ из текущего состояния.
-
-        Спрашиваем State напрямую: пробуем сделать переход — если падает,
-        значит нельзя. Это и есть вся логика проверки в одном месте.
-        """
-        from bot.domain.order_states import InvalidTransitionError
-
+        """Источник истины — State."""
         try:
             state.cancel()
             return True
         except InvalidTransitionError:
             return False
-
-    @staticmethod
-    def payment_url_action(payment_url: str) -> InlineKeyboardMarkup:
-        """Кнопка 'Оплатить' с переходом по URL платёжки."""
-        builder = InlineKeyboardBuilder()
-        builder.row(InlineKeyboardButton(text="💳 Оплатить", url=payment_url))
-        return builder.as_markup()

@@ -1,6 +1,8 @@
 import logging
+from contextlib import suppress
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,6 +12,8 @@ from bot.keyboards.callbacks import (
     OrderCancelDismissCallback,
     OrderCancelRequestCallback,
     OrderPayCallback,
+    UserOrdersListCallback,
+    UserOrderViewCallback,
 )
 from bot.keyboards.user.main_menu import BTN_ORDERS
 from bot.keyboards.user.orders import OrdersKeyboardFactory
@@ -43,11 +47,12 @@ async def mark_order_paid(
         return
 
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(f"⏳ Обрабатываем оплату заказа <b>#{order.id}</b>...")
+        with suppress(TelegramBadRequest):
+            await callback.message.edit_text(f"⏳ Обрабатываем оплату заказа <b>#{order.id}</b>...")
     await callback.answer()
 
 
-# ─── Мои заказы ───────────────────────────────────────────────────
+# ─── Список заказов ───────────────────────────────────────────────
 
 
 @router.message(F.text == BTN_ORDERS)
@@ -62,8 +67,69 @@ async def show_my_orders(message: Message, session: AsyncSession) -> None:
         return
 
     text = _render_orders_text(views)
-    kb = OrdersKeyboardFactory.my_orders_actions([(v.order.id, v.order.status) for v in views])
+    kb = OrdersKeyboardFactory.my_orders_list(views)
     await message.answer(text, reply_markup=kb)
+
+
+@router.callback_query(UserOrdersListCallback.filter())
+async def back_to_orders_list(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Возврат к списку из карточки заказа."""
+    if callback.from_user is None:
+        await callback.answer()
+        return
+
+    views = await OrderService(session).list_user_orders(callback.from_user.id)
+    if not views:
+        if isinstance(callback.message, Message):
+            with suppress(TelegramBadRequest):
+                await callback.message.edit_text("У тебя пока нет заказов.")
+        await callback.answer()
+        return
+
+    text = _render_orders_text(views)
+    kb = OrdersKeyboardFactory.my_orders_list(views)
+    if isinstance(callback.message, Message):
+        with suppress(TelegramBadRequest):
+            await callback.message.edit_text(text, reply_markup=kb)
+    await callback.answer()
+
+
+# ─── Карточка заказа ─────────────────────────────────────────────
+
+
+@router.callback_query(UserOrderViewCallback.filter())
+async def show_order_card(
+    callback: CallbackQuery,
+    callback_data: UserOrderViewCallback,
+    session: AsyncSession,
+) -> None:
+    """Открыть карточку заказа пользователя.
+
+    Загружаем все заказы и фильтруем — это безопаснее, чем дёргать get_by_id
+    напрямую, потому что мы автоматически проверяем владение.
+    """
+    if callback.from_user is None:
+        await callback.answer()
+        return
+
+    views = await OrderService(session).list_user_orders(callback.from_user.id)
+    target = next(
+        (v.order for v in views if v.order.id == callback_data.order_id),
+        None,
+    )
+    if target is None:
+        await callback.answer(
+            "Заказ не найден или принадлежит другому пользователю",
+            show_alert=True,
+        )
+        return
+
+    text = _format_order_card(target)
+    kb = OrdersKeyboardFactory.order_card(target)
+    if isinstance(callback.message, Message):
+        with suppress(TelegramBadRequest):
+            await callback.message.edit_text(text, reply_markup=kb)
+    await callback.answer()
 
 
 # ─── Отмена заказа: запрос подтверждения ─────────────────────────
@@ -75,14 +141,12 @@ async def cancel_request(
     callback_data: OrderCancelRequestCallback,
     session: AsyncSession,
 ) -> None:
-    """Запрос на отмену заказа — показываем диалог подтверждения."""
+    """Запрос на отмену — диалог подтверждения."""
     if callback.from_user is None:
         await callback.answer()
         return
 
-    # Проверим, что заказ ещё можно отменить (могло измениться, пока юзер думал)
-    order_service = OrderService(session)
-    views = await order_service.list_user_orders(callback.from_user.id)
+    views = await OrderService(session).list_user_orders(callback.from_user.id)
     target = next(
         (v.order for v in views if v.order.id == callback_data.order_id),
         None,
@@ -99,10 +163,11 @@ async def cancel_request(
         f"Это действие нельзя отменить."
     )
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(
-            text,
-            reply_markup=OrdersKeyboardFactory.cancel_confirmation(target.id),
-        )
+        with suppress(TelegramBadRequest):
+            await callback.message.edit_text(
+                text,
+                reply_markup=OrdersKeyboardFactory.cancel_confirmation(target.id),
+            )
     await callback.answer()
 
 
@@ -126,14 +191,15 @@ async def cancel_confirm(
     )
     if order is None:
         await callback.answer(
-            "Не получилось отменить (возможно, статус уже не позволяет)",
+            "Не получилось отменить (статус уже не позволяет)",
             show_alert=True,
         )
         return
 
-    # Сообщение об отмене пришлёт UserNotifierObserver. Здесь только закрываем экран.
+    # Уведомление об отмене пришлёт UserNotifierObserver
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(f"⏳ Отменяем заказ <b>#{order.id}</b>...")
+        with suppress(TelegramBadRequest):
+            await callback.message.edit_text(f"⏳ Отменяем заказ <b>#{order.id}</b>...")
     await callback.answer()
 
 
@@ -143,37 +209,54 @@ async def cancel_confirm(
 @router.callback_query(OrderCancelDismissCallback.filter())
 async def cancel_dismiss(callback: CallbackQuery, session: AsyncSession) -> None:
     """'Нет, оставить' — возвращаемся к списку заказов."""
-    if callback.from_user is None:
-        await callback.answer()
-        return
-
-    views = await OrderService(session).list_user_orders(callback.from_user.id)
-    if not views:
-        if isinstance(callback.message, Message):
-            await callback.message.edit_text("У тебя пока нет заказов.")
-        await callback.answer()
-        return
-
-    text = _render_orders_text(views)
-    kb = OrdersKeyboardFactory.my_orders_actions([(v.order.id, v.order.status) for v in views])
-    if isinstance(callback.message, Message):
-        await callback.message.edit_text(text, reply_markup=kb)
-    await callback.answer()
+    await back_to_orders_list(callback, session)
 
 
-# ─── Утилита ──────────────────────────────────────────────────────
+# ─── Утилиты ─────────────────────────────────────────────────────
 
 
 def _render_orders_text(views: list) -> str:  # type: ignore[type-arg]
-    """Текст экрана 'Мои заказы'."""
-    lines: list[str] = ["📦 <b>Твои заказы</b>", ""]
-    for v in views:
-        order = v.order
-        state = get_order_state(order.status)
-        lines.append(
-            f"<b>#{order.id}</b> — {state.label}\n"
-            f"  Сумма: {order.total / 100:.2f}₽, "
-            f"товаров: {v.items_count}\n"
-            f"  Создан: {order.created_at.strftime('%d.%m.%Y %H:%M')}"
-        )
-    return "\n\n".join(lines)
+    """Шапка экрана 'Мои заказы'."""
+    return f"📦 <b>Твои заказы</b> ({len(views)})\n\nНажми на заказ, чтобы посмотреть детали."
+
+
+def _format_order_card(order) -> str:  # type: ignore[no-untyped-def]
+    """Полная карточка заказа со составом."""
+    state = get_order_state(order.status)
+
+    items_lines: list[str] = []
+    for it in order.items:
+        items_lines.append(f"  • {it.product_name} × {it.quantity} = {it.line_total / 100:.2f}₽")
+    items_block = "\n".join(items_lines) or "  (состав не сохранён)"
+
+    delivery_labels = {
+        "courier": "🚚 Курьером",
+        "pickup": "🏬 Самовывоз",
+        "post": "📮 Почтой",
+    }
+    delivery_label = delivery_labels.get(order.delivery_method, order.delivery_method)
+
+    payment_labels = {
+        "fake": "🧪 Тестовая",
+        "yookassa": "💳 ЮKassa",
+    }
+    payment_label = payment_labels.get(order.payment_method, order.payment_method)
+
+    parts = [
+        f"📦 <b>Заказ #{order.id}</b>",
+        f"Статус: {state.label}",
+        f"Создан: {order.created_at.strftime('%d.%m.%Y %H:%M')}",
+        "",
+        "<b>Состав:</b>",
+        items_block,
+        "",
+        f"<b>Сумма:</b> {order.total / 100:.2f}₽",
+        f"<b>Доставка:</b> {delivery_label}",
+        f"<b>Адрес:</b> <code>{order.delivery_address}</code>",
+        f"<b>Телефон:</b> <code>{order.contact_phone}</code>",
+        f"<b>Оплата:</b> {payment_label}",
+    ]
+    if order.comment:
+        parts.append(f"<b>Комментарий:</b> {order.comment}")
+
+    return "\n".join(parts)
