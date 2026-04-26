@@ -5,11 +5,14 @@ from aiogram.filters import Command, CommandObject
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.filters.admin import AdminFilter
 from bot.services.order_service import OrderService
 
 logger = logging.getLogger(__name__)
 
 router = Router(name="admin.orders")
+# Защита всего роутера: только админ может использовать команды
+router.message.filter(AdminFilter())
 
 
 @router.message(Command("admin_ship"))
