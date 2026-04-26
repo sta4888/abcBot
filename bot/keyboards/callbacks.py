@@ -201,3 +201,7 @@ class AdminOrderActionCallback(CallbackData, prefix="adm_ord_a"):
 
     order_id: int
     action: str  # 'ship' | 'deliver' | 'cancel'
+
+
+class CheckoutSkipPromoCallback(CallbackData, prefix="ck_skip_promo"):
+    """Пропустить ввод промокода."""

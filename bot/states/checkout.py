@@ -13,4 +13,5 @@ class CheckoutState(StatesGroup):
     waiting_phone = State()
     waiting_payment = State()
     waiting_comment = State()
+    waiting_promo = State()
     waiting_confirmation = State()

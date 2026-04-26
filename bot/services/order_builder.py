@@ -57,6 +57,7 @@ class OrderBuilder:
     phone: str | None = None
     payment_method: str | None = None
     comment: str | None = None
+    promo_code: str | None = None  # ← новое поле
     items: list[OrderItemSpec] = field(default_factory=list)
 
     # ─── Сеттеры с валидацией: возвращают self для цепочек ──────
@@ -117,6 +118,17 @@ class OrderBuilder:
         if not items:
             raise InvalidFieldError("Корзина пуста — нечего заказывать")
         self.items = list(items)
+        return self
+
+    def set_promo_code(self, code: str | None) -> Self:
+        """Устанавливает промокод. None / пустая строка — без промокода."""
+        if code is None or not code.strip():
+            self.promo_code = None
+            return self
+        cleaned = code.strip().upper()
+        if len(cleaned) > 50:
+            raise InvalidFieldError("Промокод слишком длинный")
+        self.promo_code = cleaned
         return self
 
     # ─── Хелперы для отображения ───────────────────────────────
@@ -196,6 +208,7 @@ class OrderBuilder:
             "phone": self.phone,
             "payment_method": self.payment_method,
             "comment": self.comment,
+            "promo_code": self.promo_code,
             "items": [
                 {
                     "product_id": s.product_id,
@@ -227,15 +240,16 @@ class OrderBuilder:
             phone=cast(str | None, data.get("phone")),
             payment_method=cast(str | None, data.get("payment_method")),
             comment=cast(str | None, data.get("comment")),
+            promo_code=cast(str | None, data.get("promo_code")),  # ← добавили
             items=items,
         )
 
         # ─── Рендер сводки для подтверждения ───────────────────────
 
-    def render_summary(self) -> str:
+    def render_summary(self, total_after_discounts: int | None = None) -> str:
         """Текст сводки заказа для шага подтверждения.
 
-        Это просто форматирование на основе уже накопленных данных билдера.
+        Если total_after_discounts задан и отличается от base — показываем оба.
         """
         from bot.keyboards.user.checkout import DELIVERY_LABELS, PAYMENT_LABELS
 
@@ -259,8 +273,23 @@ class OrderBuilder:
         lines.append(f"<b>Оплата:</b> {payment_label}")
         if self.comment:
             lines.append(f"<b>Комментарий:</b> {self.comment}")
+        if self.promo_code:
+            lines.append(f"<b>Промокод:</b> <code>{self.promo_code}</code>")
 
         lines.append("")
-        lines.append(f"<b>Итого: {self.total / 100:.2f}₽</b>")
+        base_total = self.total
+        lines.append(f"<b>Базовая сумма:</b> {base_total / 100:.2f}₽")
+
+        # Если задан итог после скидок и он отличается — показываем экономию
+        if total_after_discounts is not None and total_after_discounts != base_total:
+            saved = base_total - total_after_discounts
+            lines.append(
+                f"<b>После скидок:</b> {total_after_discounts / 100:.2f}₽ (сэкономлено: {saved / 100:.2f}₽) ✨"
+            )
+
+        lines.append(
+            f"<b>Итого к оплате:</b> "
+            f"{(total_after_discounts if total_after_discounts is not None else base_total) / 100:.2f}₽"
+        )
 
         return "\n".join(lines)

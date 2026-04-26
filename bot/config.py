@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     sql_echo: bool = False
     product_placeholder_file_id: str = ""
     yookassa_enabled: bool = False
+    seasonal_discount_percent: int = 0
 
 
 @lru_cache(maxsize=1)
