@@ -176,3 +176,28 @@ class AdminProductStockCallback(CallbackData, prefix="adm_prod_st"):
 
 class AdminCancelCallback(CallbackData, prefix="adm_cancel"):
     """Универсальная отмена FSM-сценария в админке."""
+
+
+# ─── Admin: orders ────────────────────────────────────────────
+
+
+class AdminOrdersListCallback(CallbackData, prefix="adm_ords"):
+    """Список заказов с фильтром по статусу.
+
+    status: пустая строка = все активные, иначе конкретный статус.
+    """
+
+    status: str = ""
+
+
+class AdminOrderViewCallback(CallbackData, prefix="adm_ord_v"):
+    """Открыть карточку заказа."""
+
+    order_id: int
+
+
+class AdminOrderActionCallback(CallbackData, prefix="adm_ord_a"):
+    """Применить действие (ship/deliver/cancel) к заказу."""
+
+    order_id: int
+    action: str  # 'ship' | 'deliver' | 'cancel'

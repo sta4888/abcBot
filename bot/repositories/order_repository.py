@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Sequence
 
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -26,9 +27,21 @@ class OrderRepository(BaseRepository[Order]):
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 
+    async def list_by_statuses(self, statuses: Sequence[str], limit: int = 50) -> list[Order]:
+        """Заказы с одним из указанных статусов, свежие сверху."""
+        stmt = (
+            select(Order)
+            .where(Order.status.in_(statuses))
+            .options(selectinload(Order.items))
+            .order_by(Order.created_at.desc())
+            .limit(limit)
+        )
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
+
     def add(self, order: Order) -> None:
         """Добавляет заказ в сессию.
 
-        Не делает commit и не делает flush — это решает вызывающая сторона.
+        Не делает commit, не делает flush — это решает вызывающая сторона.
         """
         self._session.add(order)

@@ -1,6 +1,8 @@
 import logging
+from contextlib import suppress
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -48,7 +50,8 @@ async def show_categories_cb(callback: CallbackQuery, session: AsyncSession) -> 
     text = _format_categories_text(cats)
     kb = AdminCatalogKeyboardFactory.categories_list(cats)
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(text, reply_markup=kb)
+        with suppress(TelegramBadRequest):
+            await callback.message.edit_text(text, reply_markup=kb)
     await callback.answer()
 
 
@@ -70,7 +73,8 @@ async def show_category_card(
     text = f"<b>{cat.name}</b>\nСтатус: {active_label}\nОписание: {cat.description or '—'}"
     kb = AdminCatalogKeyboardFactory.category_card(cat)
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(text, reply_markup=kb)
+        with suppress(TelegramBadRequest):
+            await callback.message.edit_text(text, reply_markup=kb)
     await callback.answer()
 
 
@@ -93,7 +97,8 @@ async def toggle_category(
     text = f"<b>{cat.name}</b>\nСтатус: {active_label}\nОписание: {cat.description or '—'}"
     kb = AdminCatalogKeyboardFactory.category_card(cat)
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(text, reply_markup=kb)
+        with suppress(TelegramBadRequest):
+            await callback.message.edit_text(text, reply_markup=kb)
     await callback.answer("Категория скрыта" if not cat.is_active else "Категория показана")
 
 
@@ -104,10 +109,11 @@ async def toggle_category(
 async def add_category_start(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(AdminCategoryFSM.waiting_name)
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(
-            "✏️ Введи имя новой категории (например: «Аксессуары»):",
-            reply_markup=AdminCatalogKeyboardFactory.cancel_only(),
-        )
+        with suppress(TelegramBadRequest):
+            await callback.message.edit_text(
+                "✏️ Введи имя новой категории (например: «Аксессуары»):",
+                reply_markup=AdminCatalogKeyboardFactory.cancel_only(),
+            )
     await callback.answer()
 
 
@@ -141,10 +147,11 @@ async def rename_category_start(
     await state.set_state(AdminCategoryRenameFSM.waiting_name)
     await state.update_data(category_id=callback_data.category_id)
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(
-            "✏️ Введи новое имя категории:",
-            reply_markup=AdminCatalogKeyboardFactory.cancel_only(),
-        )
+        with suppress(TelegramBadRequest):
+            await callback.message.edit_text(
+                "✏️ Введи новое имя категории:",
+                reply_markup=AdminCatalogKeyboardFactory.cancel_only(),
+            )
     await callback.answer()
 
 
@@ -178,7 +185,8 @@ async def rename_category_finish(message: Message, state: FSMContext, session: A
 async def cancel_admin_fsm(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     if isinstance(callback.message, Message):
-        await callback.message.edit_text("❌ Действие отменено.")
+        with suppress(TelegramBadRequest):
+            await callback.message.edit_text("❌ Действие отменено.")
     await callback.answer()
 
 
