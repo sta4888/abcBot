@@ -109,3 +109,95 @@ class OrderCancelConfirmCallback(CallbackData, prefix="ord_cancel_y"):
 
 class OrderCancelDismissCallback(CallbackData, prefix="ord_cancel_n"):
     """Отказ от отмены — вернуться к списку заказов."""
+
+
+# ─── Admin: categories ────────────────────────────────────────
+
+
+class AdminCategoriesShowCallback(CallbackData, prefix="adm_cats"):
+    """Открыть/перерисовать список категорий."""
+
+
+class AdminCategoryEditCallback(CallbackData, prefix="adm_cat_e"):
+    """Открыть карточку категории для редактирования."""
+
+    category_id: int
+
+
+class AdminCategoryAddCallback(CallbackData, prefix="adm_cat_add"):
+    """Запустить FSM добавления категории."""
+
+
+class AdminCategoryRenameCallback(CallbackData, prefix="adm_cat_rn"):
+    """Запустить FSM переименования категории."""
+
+    category_id: int
+
+
+class AdminCategoryToggleCallback(CallbackData, prefix="adm_cat_tg"):
+    """Переключить is_active у категории."""
+
+    category_id: int
+
+
+# ─── Admin: products ──────────────────────────────────────────
+
+
+class AdminProductsShowCallback(CallbackData, prefix="adm_prods"):
+    """Открыть список товаров категории."""
+
+    category_id: int
+
+
+class AdminProductEditCallback(CallbackData, prefix="adm_prod_e"):
+    """Открыть карточку товара для редактирования."""
+
+    product_id: int
+
+
+class AdminProductAddCallback(CallbackData, prefix="adm_prod_add"):
+    """Запустить FSM добавления товара в категорию."""
+
+    category_id: int
+
+
+class AdminProductToggleCallback(CallbackData, prefix="adm_prod_tg"):
+    """Переключить is_active у товара."""
+
+    product_id: int
+
+
+class AdminProductStockCallback(CallbackData, prefix="adm_prod_st"):
+    """Изменить остаток товара. delta: +1, +10, -1, -10."""
+
+    product_id: int
+    delta: int
+
+
+class AdminCancelCallback(CallbackData, prefix="adm_cancel"):
+    """Универсальная отмена FSM-сценария в админке."""
+
+
+# ─── Admin: orders ────────────────────────────────────────────
+
+
+class AdminOrdersListCallback(CallbackData, prefix="adm_ords"):
+    """Список заказов с фильтром по статусу.
+
+    status: пустая строка = все активные, иначе конкретный статус.
+    """
+
+    status: str = ""
+
+
+class AdminOrderViewCallback(CallbackData, prefix="adm_ord_v"):
+    """Открыть карточку заказа."""
+
+    order_id: int
+
+
+class AdminOrderActionCallback(CallbackData, prefix="adm_ord_a"):
+    """Применить действие (ship/deliver/cancel) к заказу."""
+
+    order_id: int
+    action: str  # 'ship' | 'deliver' | 'cancel'

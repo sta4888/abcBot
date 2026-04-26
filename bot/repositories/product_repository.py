@@ -33,8 +33,14 @@ class ProductRepository(BaseRepository[Product]):
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 
+    async def list_all_by_category(self, category_id: int) -> list[Product]:
+        """Все товары категории, включая неактивные. Для админки."""
+        stmt = select(Product).where(Product.category_id == category_id).order_by(Product.id)
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
+
     async def count_by_category(self, category_id: int) -> int:
-        """Сколько активных товаров в категории — для пагинации."""
+        """Сколько активных товаров в категории."""
         stmt = (
             select(func.count())
             .select_from(Product)
@@ -45,3 +51,7 @@ class ProductRepository(BaseRepository[Product]):
         )
         result = await self._session.execute(stmt)
         return result.scalar_one()
+
+    def add(self, product: Product) -> None:
+        """Добавляет в сессию."""
+        self._session.add(product)
