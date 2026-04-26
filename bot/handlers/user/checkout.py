@@ -26,7 +26,11 @@ from bot.services.order_builder import (
     OrderBuilder,
     OrderItemSpec,
 )
-from bot.services.order_service import OrderService  # ← новый
+from bot.services.order_service import (
+    InsufficientStockError,
+    OrderService,
+    ProductNotFoundError,
+)
 from bot.states.checkout import CheckoutState
 
 logger = logging.getLogger(__name__)
@@ -323,6 +327,24 @@ async def confirm_checkout(
 
     try:
         order = await OrderService(session).create_order_from_builder(builder)
+    except InsufficientStockError as e:
+        logger.info("Order creation failed: insufficient stock for %r", e.product_name)
+        await callback.answer(
+            f"⚠️ Недостаточно товара «{e.product_name}»: "
+            f"доступно {e.available}, в корзине {e.requested}.\n"
+            f"Уменьши количество в корзине или удали этот товар.",
+            show_alert=True,
+        )
+        # FSM не очищаем — пользователь может уменьшить корзину и подтвердить заново.
+        # Но возвращаемся в waiting_confirmation, чтобы повторное нажатие 'Подтвердить' сработало.
+        return
+    except ProductNotFoundError as e:
+        logger.info("Order creation failed: product not found (%s)", e)
+        await callback.answer(
+            f"⚠️ {e}\nУдали этот товар из корзины и попробуй снова.",
+            show_alert=True,
+        )
+        return
     except Exception as e:
         logger.exception("Failed to create order")
         await callback.answer(f"Не удалось создать заказ: {e}", show_alert=True)

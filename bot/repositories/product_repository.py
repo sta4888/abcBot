@@ -55,3 +55,13 @@ class ProductRepository(BaseRepository[Product]):
     def add(self, product: Product) -> None:
         """Добавляет в сессию."""
         self._session.add(product)
+
+    async def get_for_update(self, product_id: int) -> Product | None:
+        """Загрузить Product с SELECT FOR UPDATE.
+
+        Используется при создании заказа: блокирует строку до конца транзакции,
+        чтобы другие транзакции не могли изменить stock параллельно.
+        """
+        stmt = select(Product).where(Product.id == product_id).with_for_update()
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
