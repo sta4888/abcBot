@@ -18,3 +18,19 @@ class CategoryRepository(BaseRepository[Category]):
         stmt = select(Category).where(Category.is_active.is_(True)).order_by(Category.name)
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
+
+    async def list_all(self) -> list[Category]:
+        """Все категории, включая скрытые. Для админских экранов."""
+        stmt = select(Category).order_by(Category.name)
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def get_by_name(self, name: str) -> Category | None:
+        """Категория по имени (для проверки уникальности)."""
+        stmt = select(Category).where(Category.name == name)
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    def add(self, category: Category) -> None:
+        """Добавляет в сессию. Не делает commit/flush."""
+        self._session.add(category)
