@@ -77,3 +77,10 @@ class OrdersKeyboardFactory:
             return True
         except InvalidTransitionError:
             return False
+
+    @staticmethod
+    def payment_url_action(payment_url: str) -> InlineKeyboardMarkup:
+        """Кнопка 'Оплатить' с переходом по URL платёжки."""
+        builder = InlineKeyboardBuilder()
+        builder.row(InlineKeyboardButton(text="💳 Оплатить", url=payment_url))
+        return builder.as_markup()

@@ -18,7 +18,7 @@ DELIVERY_LABELS = {
 
 PAYMENT_LABELS = {
     "fake": "🧪 Тестовая оплата",
-    # 'yookassa': '💳 ЮKassa',  — в итерации 8
+    "yookassa": "💳 ЮKassa",
     # 'stripe': '💳 Stripe',    — в итерации 8
 }
 
@@ -58,9 +58,13 @@ class CheckoutKeyboardFactory:
 
     @staticmethod
     def payment_methods() -> InlineKeyboardMarkup:
-        """Выбор способа оплаты."""
+        """Выбор способа оплаты — только из тех, что включены в Factory."""
+        from bot.services.payment import get_payment_factory
+
         builder = InlineKeyboardBuilder()
-        for method, label in PAYMENT_LABELS.items():
+        available = get_payment_factory().available_methods()
+        for method in available:
+            label = PAYMENT_LABELS.get(method, method)
             builder.button(
                 text=label,
                 callback_data=CheckoutPaymentCallback(method=method),

@@ -273,10 +273,17 @@ async def confirm_checkout(
 
     payment_init = await OrderService(session).initiate_payment(order)
 
-    # Заголовок плюс текст от стратегии
     text = f"🎉 <b>Заказ #{order.id} создан!</b>\n\n{payment_init.text}"
 
-    kb = OrdersKeyboardFactory.pay_action(order.id) if payment_init.requires_user_action else None
+    # Определяем клавиатуру по флагам стратегии:
+    # - requires_user_action: кнопка "Я оплатил" (Fake)
+    # - payment_url: кнопка "Оплатить" с переходом по URL (YooKassa)
+    # - ничего: пользователь просто ждёт (на случай провайдеров без UI)
+    kb = None
+    if payment_init.requires_user_action:
+        kb = OrdersKeyboardFactory.pay_action(order.id)
+    elif payment_init.payment_url is not None:
+        kb = OrdersKeyboardFactory.payment_url_action(payment_init.payment_url)
 
     if isinstance(callback.message, Message):
         await callback.message.edit_text(text, reply_markup=kb)
