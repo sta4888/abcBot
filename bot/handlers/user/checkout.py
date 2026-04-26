@@ -11,6 +11,7 @@ from bot.keyboards.callbacks import (
     CheckoutDeliveryCallback,
     CheckoutPaymentCallback,
     CheckoutSkipCommentCallback,
+    CheckoutSkipPromoCallback,
     CheckoutStartCallback,
 )
 from bot.keyboards.user.checkout import (
@@ -210,7 +211,7 @@ async def step_comment_text(message: Message, state: FSMContext) -> None:
         return
 
     await state.set_data(builder.to_dict())
-    await _go_to_confirmation(message, state, builder)
+    await _go_to_promo_step(message, state)
 
 
 @router.callback_query(CheckoutState.waiting_comment, CheckoutSkipCommentCallback.filter())
@@ -221,7 +222,7 @@ async def step_comment_skip(callback: CallbackQuery, state: FSMContext) -> None:
     builder.set_comment(None)
     await state.set_data(builder.to_dict())
     if isinstance(callback.message, Message):
-        await _go_to_confirmation(callback.message, state, builder)
+        await _go_to_promo_step(callback.message, state)
     await callback.answer()
 
 
@@ -231,11 +232,70 @@ async def _go_to_confirmation(
     builder: OrderBuilder,
 ) -> None:
     """Переход на шаг подтверждения: показать сводку и кнопки."""
+    from bot.config import get_settings
+    from bot.services.discounts import calculate_preview_total
+
+    seasonal = get_settings().seasonal_discount_percent
+    preview_total = calculate_preview_total(
+        items=builder.items,
+        promo_code=builder.promo_code,
+        seasonal_percent=seasonal,
+    )
+
     await state.set_state(CheckoutState.waiting_confirmation)
     await message.answer(
-        builder.render_summary(),
+        builder.render_summary(total_after_discounts=preview_total),
         reply_markup=CheckoutKeyboardFactory.confirmation(),
     )
+
+
+async def _go_to_promo_step(message: Message, state: FSMContext) -> None:
+    """Переход на шаг ввода промокода."""
+    await state.set_state(CheckoutState.waiting_promo)
+    await message.answer(
+        "🎟 Если есть промокод — введи его. Или нажми «Без промокода».\n\n<i>Например: WELCOME10</i>",
+        reply_markup=CheckoutKeyboardFactory.promo_step(),
+    )
+
+
+@router.message(CheckoutState.waiting_promo, F.text)
+async def step_promo_text(message: Message, state: FSMContext) -> None:
+    """Получили промокод текстом."""
+    if message.text is None:
+        return
+
+    from bot.services.discounts import lookup_promo_code
+
+    rule = lookup_promo_code(message.text)
+    if rule is None:
+        await message.answer(
+            "⚠️ Промокод не найден. Проверь и попробуй ещё раз или нажми «Без промокода».",
+            reply_markup=CheckoutKeyboardFactory.promo_step(),
+        )
+        return
+
+    data = await state.get_data()
+    builder = OrderBuilder.from_dict(data)
+    try:
+        builder.set_promo_code(message.text)
+    except InvalidFieldError as e:
+        await message.answer(f"⚠️ {e}")
+        return
+
+    await state.set_data(builder.to_dict())
+    await _go_to_confirmation(message, state, builder)
+
+
+@router.callback_query(CheckoutState.waiting_promo, CheckoutSkipPromoCallback.filter())
+async def step_promo_skip(callback: CallbackQuery, state: FSMContext) -> None:
+    """Пропустить промокод."""
+    data = await state.get_data()
+    builder = OrderBuilder.from_dict(data)
+    builder.set_promo_code(None)
+    await state.set_data(builder.to_dict())
+    if isinstance(callback.message, Message):
+        await _go_to_confirmation(callback.message, state, builder)
+    await callback.answer()
 
 
 # ─── Шаг 6: подтверждение и создание заказа ────────────────────────

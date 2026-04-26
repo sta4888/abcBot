@@ -45,3 +45,18 @@ class OrderRepository(BaseRepository[Order]):
         Не делает commit, не делает flush — это решает вызывающая сторона.
         """
         self._session.add(order)
+
+    async def count_paid_by_user(self, user_id: int) -> int:
+        """Количество заказов пользователя в финальных платных статусах."""
+        from sqlalchemy import func
+
+        stmt = (
+            select(func.count())
+            .select_from(Order)
+            .where(
+                Order.user_id == user_id,
+                Order.status.in_(("paid", "shipped", "delivered")),
+            )
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one()

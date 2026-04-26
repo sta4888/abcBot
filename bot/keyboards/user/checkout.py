@@ -7,6 +7,7 @@ from bot.keyboards.callbacks import (
     CheckoutDeliveryCallback,
     CheckoutPaymentCallback,
     CheckoutSkipCommentCallback,
+    CheckoutSkipPromoCallback,
 )
 
 # Человекочитаемые названия методов для UI
@@ -104,6 +105,24 @@ class CheckoutKeyboardFactory:
             InlineKeyboardButton(
                 text="✅ Подтвердить заказ",
                 callback_data=CheckoutConfirmCallback().pack(),
+            )
+        )
+        builder.row(
+            InlineKeyboardButton(
+                text="❌ Отменить",
+                callback_data=CheckoutCancelCallback().pack(),
+            )
+        )
+        return builder.as_markup()
+
+    @staticmethod
+    def promo_step() -> InlineKeyboardMarkup:
+        """На шаге промокода — 'Без промокода' / 'Отменить'."""
+        builder = InlineKeyboardBuilder()
+        builder.row(
+            InlineKeyboardButton(
+                text="⏭ Без промокода",
+                callback_data=CheckoutSkipPromoCallback().pack(),
             )
         )
         builder.row(
